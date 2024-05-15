@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <meta http-equiv="x-ua-compatible" content="IE=edge">
+    <meta name="viewport"
+          content="width=device-width, height=device-height, initial-scale=1, maximum-scale=1, minimum-scale=1, user-scalable=no"/>
+    <title>阿里播放器</title>
+    <script type="text/javascript" charset="utf-8" src="/aliplayer-min.js"></script>
+    <link rel="stylesheet" href="/aliplayer-min.css">
+</head>
+<body>
+<div class="prism-player" id="player-con"></div>
+<script>
+    /** 参考文档 https://help.aliyun.com/zh/vod/developer-reference/basic-features?spm=a2c4g.11186623.0.0.22231db3C2hsRo#section-cxa-8u8-v7z */
+    /** 直播服务器可以使用 parse_livego 或者php_rtmp 或者 lalserver-golang 这三个项目，也可以使用nginx作为直播服务器 */
+    var player = new Aliplayer({
+            "id": "player-con",
+            //"source": "http://127.0.0.1:18080/a/b.flv",
+            "source": "ws://127.0.0.1:18080/a/b.flv",
+            "width": "100%",
+            "height": "500px",
+            "autoplay": true,
+            "isLive": true,
+            "rePlay": false,
+            "playsinline": true,
+            "preload": true,
+            "enableStashBufferForFlv": true,
+            "stashInitialSizeForFlv": 32,
+            "controlBarVisibility": "hover",
+            "useH5Prism": true,
+
+        }, function (player) {
+            console.log("The player is created");
+            /** 必须设置音量为0 否则浏览器禁止播放，延迟11秒，有点吓人 */
+            player.setVolume(0)
+            player.play();
+        }
+    );
+</script>
+</body>
