@@ -9,3 +9,4 @@ $server->rtmpPort = 1935;
 $server->flvPort = 8501;
 /** 启动服务 */
 $server->start();
+

@@ -40,9 +40,9 @@ ffmpeg -re -stream_loop 1  -i "movie.mp4" -vcodec h264 -acodec aac -f flv rtmp:/
 ```text
 rtmp播放地址: rtmp://127.0.0.1/a/b
 
-httpflv播放地址: http://127.0.0.1:18080/a/b.flv
+httpflv播放地址: http://127.0.0.1:8501/a/b.flv
 
-wsflv播放地址: ws://127.0.0.1:18080/a/b.flv
+wsflv播放地址: ws://127.0.0.1:8501/a/b.flv
 ```
 播放工具可以使用<a href="https://get.videolan.org/vlc/3.0.20/win64/vlc-3.0.20-win64.exe">VLC</a>，
 ffplay，本项目提供网页播放，直接使用浏览器打开index.html即可<a href="./index.html">播放</a>。
@@ -51,6 +51,8 @@ ffplay，本项目提供网页播放，直接使用浏览器打开index.html即�
 
  需要注意的是，本项目使用的是php的cli模式，和传统的fpm模式有根本的区别。
  如果在运行的时候报错，请检查报错信息，多半是缺少php扩展，建议新手使用<a href = "https://www.xp.cn/">phpstudy</a>这个集成环境，一键搞定环境搭建工作。<br>
+ 
+
  
  
 
