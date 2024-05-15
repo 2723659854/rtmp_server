@@ -5,9 +5,7 @@ namespace Root\Io;
 use Root\rtmp\TcpConnection;
 
 /**
- * @purpose select的IO多路复用模型
- * @note 提供http服务器服务
- * @note 提供异步客户端服务
+ * @purpose 使用了select的IO多路复用模型
  */
 class RtmpDemo
 {

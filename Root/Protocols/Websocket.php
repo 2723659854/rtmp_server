@@ -95,7 +95,7 @@ class Websocket implements ProtocolInterface
                 // Close package.
                 case 0x8:
                     // Try to emit onWebSocketClose callback.
-                    $close_cb = $connection->onWebSocketClose ?? $connection->worker->onWebSocketClose ?? false;
+                    $close_cb = $connection->onWebSocketClose ?? false;
                     if ($close_cb) {
                         try {
                             $close_cb($connection);
