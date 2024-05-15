@@ -9,65 +9,59 @@ use Root\rtmp\TcpConnection;
  */
 class RtmpDemo
 {
-    /** 设置连接回调事件 */
-    public $startRtmp = NULL;
-
-    /** 设置接收消息回调 */
+    /** 设置接收http数据的回调 */
     public $onMessage = NULL;
 
-    /** ws链接事件 */
+    /** 设置接收ws数据的回调 */
     public $onWebSocketConnect = null;
 
-    /** 存放所有socket */
+    /** 存放所有socket 注意内存泄漏 */
     public static $allSocket;
 
     /** @var string $host 监听的ip */
     private $host = '0.0.0.0';
 
-    /** @var string $port RTMP监听的端口 */
+    /** @var string $port RTMP监听的端口 可修改 */
     public $rtmpPort = '1935';
 
-    /** @var string $flvPort flv监听端口 */
-    public $flvPort = '18080';
+    /** @var string $flvPort flv监听端口 可修改 */
+    public $flvPort = '8501';
 
     /** @var string $protocol 通信协议 */
-    public $protocol = 'tcp';
+    private $protocol = 'tcp';
 
     /** rtmp服务器实例 */
     public static $instance = null;
 
     /**
-     * Read event.
-     *
+     * 读事件
      * @var int
      */
     const EV_READ = 1;
 
     /**
-     * Write event.
-     *
+     * 写事件
      * @var int
      */
     const EV_WRITE = 2;
 
     /** 所有的事件 */
-    public array $_allEvents = [];
+    private array $_allEvents = [];
 
     /** 读事件 */
-    public array $_readFds = [];
+    private array $_readFds = [];
 
     /** 写事件 */
-    public array $_writeFds = [];
+    private array $_writeFds = [];
 
-
-    /** 所有的flv播放器客戶端 */
+    /** 所有的flv播放器客戶端 不可手动修改，否则影响flv数据传输 */
     public static array $flvClients = [];
+
     /** flv服務端 */
-    public static $flvServerSocket = null;
+    private static $flvServerSocket = null;
 
     /**
-     * PHP built-in protocols.
-     *
+     * PHP 默认支持的协议
      * @var array
      */
     protected static $_builtinTransports = array(
@@ -77,30 +71,69 @@ class RtmpDemo
         'ssl' => 'tcp'
     );
 
+    /** @var string $transport 默认通信传输协议 */
     public $transport = 'tcp';
 
+    /** 监听地址 */
+    public string $listeningAddress = '';
+
+    /** 服务端socket */
+    private array $serverSocket = [];
+
     /**
-     * Context of socket.
-     *
-     * @var resource
+     * 初始化
+     * RtmpDemo constructor.
      */
-    protected $_context = null;
+    public function __construct()
+    {
+    }
 
-    /** 协议名称 */
-    protected $_socketName = '';
+    /**
+     * 解析协议和监听地址
+     * @param string $socketName 协议名称
+     * @return string|void
+     * @throws \Exception
+     */
+    public function parseSocketAddress($socketName)
+    {
+        if (!$socketName) {
+            return;
+        }
+        /** 获取协议类型和监听地址 */
+        list($scheme, $address) = \explode(':', $socketName, 2);
+        /** 如果不是php自带的协议类型 */
+        if (!isset(static::$_builtinTransports[$scheme])) {
+            $scheme = \ucfirst($scheme);
+            /** 加载扩展协议 */
+            $this->protocol = \substr($scheme, 0, 1) === '\\' ? $scheme : 'Protocols\\' . $scheme;
+            if (!isset(static::$_builtinTransports[$this->transport])) {
+                /** 不支持的协议 */
+                throw new \Exception('Bad transport ' . \var_export($this->transport, true));
+            }
+        } else {
+            $this->transport = $scheme;
+        }
+        /** 返回监听地址 */
+        return static::$_builtinTransports[$this->transport] . ":" . $address;
+    }
 
-
-    public function add($fd, $flag, $func, $args = array())
+    /**
+     * 添加读写事件
+     * @param resource $fd socket链接
+     * @param int $flag 读写类型
+     * @param array $func 回调函数
+     * @return bool
+     */
+    public function add($fd, $flag, $func)
     {
         switch ($flag) {
             case self::EV_READ:
             case self::EV_WRITE:
                 $count = $flag === self::EV_READ ? \count($this->_readFds) : \count($this->_writeFds);
                 if ($count >= 1024) {
-                    //echo "Warning: system call select exceeded the maximum number of connections 1024, please install event/libevent extension for more connections.\n";
                     echo "系统最大支持1024个链接\n";
                 } else if (\DIRECTORY_SEPARATOR !== '/' && $count >= 256) {
-                    echo "Warning: system call select exceeded the maximum number of connections 256.\n";
+                    echo "系统调用选择超出了最大连接数256\n";
                 }
                 $fd_key = (int)$fd;
                 $this->_allEvents[$fd_key][$flag] = array($func, $fd);
@@ -116,33 +149,11 @@ class RtmpDemo
     }
 
     /**
-     * Parse local socket address.
-     *
-     * @throws \Exception
+     * 删除事件
+     * @param resource $fd 链接的socket
+     * @param int $flag 事件类型
+     * @return bool
      */
-    public function parseSocketAddress()
-    {
-        if (!$this->_socketName) {
-            return;
-        }
-        // Get the application layer communication protocol and listening address.
-        list($scheme, $address) = \explode(':', $this->_socketName, 2);
-        // Check application layer protocol class.
-        if (!isset(static::$_builtinTransports[$scheme])) {
-            $scheme = \ucfirst($scheme);
-            $this->protocol = \substr($scheme, 0, 1) === '\\' ? $scheme : 'Protocols\\' . $scheme;
-            var_dump($this->protocol);
-            if (!isset(static::$_builtinTransports[$this->transport])) {
-                throw new \Exception('Bad worker->transport ' . \var_export($this->transport, true));
-            }
-        } else {
-            $this->transport = $scheme;
-        }
-        //local socket
-        return static::$_builtinTransports[$this->transport] . ":" . $address;
-    }
-
-    /** 删除事件 */
     public function del($fd, $flag)
     {
         $fd_key = (int)$fd;
@@ -163,42 +174,11 @@ class RtmpDemo
         return false;
     }
 
-    /** 静态化调用 */
-    public static function __callStatic($name, $arguments)
-    {
-        return RtmpDemo::instance()->{$name}(...$arguments);
-    }
-
-    const DEFAULT_BACKLOG = 102400;
-
     /**
-     * 初始化 用于解析协议
-     * @param $socket_name
-     * @param array $context_option
-     * @return void
+     * 创建服务器
+     * @return false|resource
      */
-    public function init($socket_name = '', array $context_option = array())
-    {
-        // Context for socket.
-        if ($socket_name) {
-            $this->_socketName = $socket_name;
-            if (!isset($context_option['socket']['backlog'])) {
-                $context_option['socket']['backlog'] = static::DEFAULT_BACKLOG;
-            }
-            $this->_context = \stream_context_create($context_option);
-        }
-    }
-
-    
-    /** 监听地址 */
-    public string $listeningAddress = '';
-
-    /** 服务端socket */
-    public array $serverSocket = [];
-
-
-    /** 初始化 */
-    public function __construct()
+    private function createServer()
     {
         /** @var string $listeningAddress 拼接监听地址 */
         if ($this->listeningAddress) {
@@ -223,39 +203,26 @@ class RtmpDemo
         self::$allSocket[(int)$socket] = $socket;
         /** 单独保存服务端 */
         $this->serverSocket[(int)$socket] = $socket;
+        /** 返回服务器实例 */
+        return $socket;
     }
 
     /**
-     * 开启flv播放服务
+     * 创建flv播放服务
      * @return void
      */
     public function createFlvSever()
     {
-        /** @var string $listeningAddress 拼接监听地址 */
-        if ($this->listeningAddress) {
-            $listeningAddress = $this->listeningAddress;
-        } else {
-            $listeningAddress = $this->protocol . '://' . $this->host . ':' . $this->flvPort;
-        }
-        echo "开始监听{$listeningAddress}\r\n";
-        /** 不验证https证书 */
-        $contextOptions['ssl'] = ['verify_peer' => false, 'verify_peer_name' => false];
-        /** 配置socket流参数 */
-        $context = stream_context_create($contextOptions);
-        /** 设置端口复用 解决惊群效应  */
-        stream_context_set_option($context, 'socket', 'so_reuseport', 1);
-        /** 设置ip复用 */
-        stream_context_set_option($context, 'socket', 'so_reuseaddr', 1);
-        /** 设置服务端：监听地址+端口 */
-        $socket = stream_socket_server($listeningAddress, $errno, $errstr, STREAM_SERVER_BIND | STREAM_SERVER_LISTEN, $context);
-        /** 设置非阻塞，语法是关闭阻塞 */
-        stream_set_blocking($socket, 0);
-        /** 将服务端保存所有socket列表  */
-        self::$allSocket[(int)$socket] = $socket;
-        /** 单独保存服务端 */
-        $this->serverSocket[(int)$socket] = $socket;
         /** 保存flv服务端的socket */
-        self::$flvServerSocket = $socket;
+        self::$flvServerSocket = $this->createServer();
+    }
+
+    /**
+     * 创建rtmp服务
+     */
+    private function createRtmpServer()
+    {
+        $this->createServer();
     }
 
     /**
@@ -270,18 +237,16 @@ class RtmpDemo
         return self::$instance;
     }
 
-    /** 启动服务 */
+    /**
+     * 启动服务
+     */
     public function start()
     {
-        $this->startRtmp = function (\Root\rtmp\TcpConnection $connection){
-            /** 将传递进来的数据解码 */
-            new \MediaServer\Rtmp\RtmpStream(
-                new \MediaServer\Utils\WMBufferStream($connection)
-            );
-        };
+        /** 开启rtmp 服务 */
+        $this->createRtmpServer();
         /** 启动flv服务 */
         $this->startFlv();
-        /** 调试模式 */
+        /** 开始接收客户端请求 */
         $this->accept();
     }
 
@@ -292,11 +257,13 @@ class RtmpDemo
      */
     private function startFlv()
     {
-        new \MediaServer\Http\HttpWMServer("\\MediaServer\\Http\\ExtHttpProtocol://0.0.0.0:".$this->flvPort,$this);
+        new \MediaServer\Http\HttpWMServer("\\MediaServer\\Http\\ExtHttpProtocol://0.0.0.0:" . $this->flvPort, $this);
     }
 
 
-    /** 接收客户端消息 */
+    /**
+     * 接受客户端的链接，并处理数据
+     */
     private function accept()
     {
         /** 创建多个子进程阻塞接收服务端socket 这个while死循环 会导致for循环被阻塞，不往下执行，创建了子进程也没有用，直接在第一个子进程哪里阻塞了 */
@@ -316,7 +283,6 @@ class RtmpDemo
                 stream_select($read, $write, $except, 60);
             } catch (\Exception $exception) {
                 var_dump($exception->getMessage());
-                debug_print_backtrace();
             }
 
             /** 处理可读的链接 */
@@ -324,26 +290,29 @@ class RtmpDemo
                 foreach ($read as $fd) {
                     $fd_key = (int)$fd;
                     /** 处理多个服务端的链接 */
-                    if (in_array($fd,$this->serverSocket)) {
+                    if (in_array($fd, $this->serverSocket)) {
                         /** 读取服务端接收到的 消息，这个消息的内容是客户端连接 ，stream_socket_accept方法负责接收客户端连接 */
                         $clientSocket = stream_socket_accept($fd, 0, $remote_address); //阻塞监听 设置超时0，并获取客户端地址
-                        /** 把flv的客戶端單獨保存有用 */
-                        if (self::$flvServerSocket && $fd == self::$flvServerSocket){
+                        /** 把flv的客戶端單獨保存有用，后面解码数据的时候，需要手动切换协议 */
+                        if (self::$flvServerSocket && $fd == self::$flvServerSocket) {
                             self::$flvClients[(int)$clientSocket] = $clientSocket;
                         }
-                        //触发事件的连接的回调
-                        /** 如果这个客户端连接不为空，并且本服务的startRtmp是回调函数 */
-                        if (!empty($clientSocket) && is_callable($this->startRtmp)) {
-                            /** 把客户端连接传递到startRtmp回调函数 */
+                        /** 如果这个客户端连接不为空 */
+                        if (!empty($clientSocket)) {
                             try {
+                                /** 使用tcp解码器 */
                                 $connection = new TcpConnection($clientSocket, $remote_address);
-                                $connection->protocol               = $this->protocol;
-                                $connection->transport              = $this->transport;
+                                /** 通信协议 */
+                                $connection->transport = $this->transport;
                                 /** 支持http的flv播放 */
-                                $connection->onMessage              = $this->onMessage;
+                                $connection->onMessage = $this->onMessage;
                                 /** 支持ws的flv播放 */
                                 $connection->onWebSocketConnect = $this->onWebSocketConnect;
-                                call_user_func($this->startRtmp, $connection);
+                                /** 处理rtmp链接事件 */
+                                new \MediaServer\Rtmp\RtmpStream(
+                                /** 使用自定义协议处理传递过来的数据 */
+                                    new \MediaServer\Utils\WMBufferStream($connection)
+                                );
                             } catch (\Exception|\RuntimeException $exception) {
                                 var_dump($exception->getMessage());
                             }
@@ -351,6 +320,7 @@ class RtmpDemo
                         /** 将这个客户端连接保存，目测这里如果不保存，应该是无法发送和接收消息的，就是要把所有的连接都保存在内存中 */
                         RtmpDemo::$allSocket[(int)$clientSocket] = $clientSocket;
                     } else {
+                        /** 已经是建立过的链接，则直接该链接的读事件 */
                         if (isset($this->_allEvents[$fd_key][self::EV_READ])) {
                             \call_user_func_array(
                                 $this->_allEvents[$fd_key][self::EV_READ][0],

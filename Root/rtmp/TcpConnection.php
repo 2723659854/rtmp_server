@@ -60,6 +60,11 @@ class TcpConnection extends ConnectionInterface
     public $onMessage = null;
 
     /**
+     * @var null ws链接处理事件
+     */
+    public $onWebSocketConnect = null;
+
+    /**
      * Emitted when the other end of the socket sends a FIN packet.
      *
      * @var callable
@@ -583,6 +588,7 @@ class TcpConnection extends ConnectionInterface
 
         // If the application layer protocol has been set up.
         if ($this->protocol !== null) {
+
             /** 這裡的協議出現了問題 */
             $parser = $this->protocol;
             /** 如果是flv客戶端，手動切換協議 */
