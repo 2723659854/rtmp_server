@@ -15,20 +15,20 @@ class RtmpDemo
     /** 设置接收消息回调 */
     public $onMessage = NULL;
 
-    /** 启动事件 */
-    public $onWorkerStart = null;
-
     /** ws链接事件 */
     public $onWebSocketConnect = null;
 
     /** 存放所有socket */
     public static $allSocket;
 
-    /** @var string $host 监听的ip和协议 */
-    public $host = '0.0.0.0';
+    /** @var string $host 监听的ip */
+    private $host = '0.0.0.0';
 
-    /** @var string $port 监听的端口 */
-    public $port = '1935';
+    /** @var string $port RTMP监听的端口 */
+    public $rtmpPort = '1935';
+
+    /** @var string $flvPort flv监听端口 */
+    public $flvPort = '18080';
 
     /** @var string $protocol 通信协议 */
     public $protocol = 'tcp';
@@ -204,7 +204,7 @@ class RtmpDemo
         if ($this->listeningAddress) {
             $listeningAddress = $this->listeningAddress;
         } else {
-            $listeningAddress = $this->protocol . '://' . $this->host . ':' . $this->port;
+            $listeningAddress = $this->protocol . '://' . $this->host . ':' . $this->rtmpPort;
         }
         echo "开始监听{$listeningAddress}\r\n";
         /** 不验证https证书 */
@@ -235,7 +235,7 @@ class RtmpDemo
         if ($this->listeningAddress) {
             $listeningAddress = $this->listeningAddress;
         } else {
-            $listeningAddress = $this->protocol . '://' . $this->host . ':' . $this->port;
+            $listeningAddress = $this->protocol . '://' . $this->host . ':' . $this->flvPort;
         }
         echo "开始监听{$listeningAddress}\r\n";
         /** 不验证https证书 */
@@ -290,9 +290,9 @@ class RtmpDemo
      * @return void
      * @comment 就是再添加一个监听地址
      */
-    public function startFlv()
+    private function startFlv()
     {
-        new \MediaServer\Http\HttpWMServer("\\MediaServer\\Http\\ExtHttpProtocol://0.0.0.0:18080",$this);
+        new \MediaServer\Http\HttpWMServer("\\MediaServer\\Http\\ExtHttpProtocol://0.0.0.0:".$this->flvPort,$this);
     }
 
 
