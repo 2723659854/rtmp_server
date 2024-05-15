@@ -22,15 +22,16 @@ class HttpWMServer
 
     public  function __construct($socket_name = '', RtmpDemo $server = null)
     {
+        /** 初始化  */
         $server->init($socket_name);
+        /** 解析协议并设置flv监听地址 */
         $server->listeningAddress = $server->parseSocketAddress();
-        $server->startFlv();
+        /** 创建flv服务器 */
+        $server->createFlvSever();
         //使用扩展的协议
         /** 绑定ws请求响应事件 */
-        //$this->onWebSocketConnect = [$this,'onWebsocketRequest'];
         $server->onWebSocketConnect = [$this,'onWebsocketRequest'];
         /** 绑定http请求事件 */
-        //$this->onMessage = [$this,'onHttpRequest'];
         $server->onMessage = [$this,'onHttpRequest'];
     }
 

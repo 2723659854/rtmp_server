@@ -9,11 +9,8 @@ use Root\rtmp\TcpConnection;
  */
 class RtmpDemo
 {
-    /** 服务端 */
-    protected $socket = NULL;
-
     /** 设置连接回调事件 */
-    public $onConnect = NULL;
+    public $startRtmp = NULL;
 
     /** 设置接收消息回调 */
     public $onMessage = NULL;
@@ -36,19 +33,7 @@ class RtmpDemo
     /** @var string $protocol 通信协议 */
     public $protocol = 'tcp';
 
-    /** 异步http客户端 */
-    private static $success = [];
-    /** 需要发送的请求 */
-    private static $request = [];
-    /** 异步http客户端 */
-    private static $fail = [];
-
-    /** 异步请求的 原始数据 */
-    public static $asyncRequestData = [];
-
-    /** 客户端上传数据最大请求时间 ，如果超过这个时间就断开这个连接 默认6分钟 */
-    private static $maxRequestTime = 360;
-
+    /** rtmp服务器实例 */
     public static $instance = null;
 
     /**
@@ -74,7 +59,37 @@ class RtmpDemo
     /** 写事件 */
     public array $_writeFds = [];
 
-    /** 添加事件 */
+
+    /** 所有的flv播放器客戶端 */
+    public static array $flvClients = [];
+    /** flv服務端 */
+    public static $flvServerSocket = null;
+
+    /**
+     * PHP built-in protocols.
+     *
+     * @var array
+     */
+    protected static $_builtinTransports = array(
+        'tcp' => 'tcp',
+        'udp' => 'udp',
+        'unix' => 'unix',
+        'ssl' => 'tcp'
+    );
+
+    public $transport = 'tcp';
+
+    /**
+     * Context of socket.
+     *
+     * @var resource
+     */
+    protected $_context = null;
+
+    /** 协议名称 */
+    protected $_socketName = '';
+
+
     public function add($fd, $flag, $func, $args = array())
     {
         switch ($flag) {
@@ -127,59 +142,6 @@ class RtmpDemo
         return static::$_builtinTransports[$this->transport] . ":" . $address;
     }
 
-
-
-
-    /**
-     * PHP built-in protocols.
-     *
-     * @var array
-     */
-    protected static $_builtinTransports = array(
-        'tcp' => 'tcp',
-        'udp' => 'udp',
-        'unix' => 'unix',
-        'ssl' => 'tcp'
-    );
-
-    public $transport = 'tcp';
-
-    /**
-     * Unix user of processes, needs appropriate privileges (usually root).
-     *
-     * @var string
-     */
-    public $user = '';
-
-    /**
-     * Unix group of processes, needs appropriate privileges (usually root).
-     *
-     * @var string
-     */
-    public $group = '';
-
-    /**
-     * Context of socket.
-     *
-     * @var resource
-     */
-    protected $_context = null;
-
-    protected $_socketName = '';
-    /**
-     * reuse port.
-     *
-     * @var bool
-     */
-    public $reusePort = true;
-
-    /**
-     * Listening socket.
-     *
-     * @var resource
-     */
-    protected $_mainSocket = null;
-
     /** 删除事件 */
     public function del($fd, $flag)
     {
@@ -209,6 +171,12 @@ class RtmpDemo
 
     const DEFAULT_BACKLOG = 102400;
 
+    /**
+     * 初始化 用于解析协议
+     * @param $socket_name
+     * @param array $context_option
+     * @return void
+     */
     public function init($socket_name = '', array $context_option = array())
     {
         // Context for socket.
@@ -221,21 +189,13 @@ class RtmpDemo
         }
     }
 
-    /**
-     * Get socket name.
-     *
-     * @return string
-     */
-    public function getSocketName()
-    {
-        return $this->_socketName ? \lcfirst($this->_socketName) : 'none';
-    }
-
+    
     /** 监听地址 */
     public string $listeningAddress = '';
 
     /** 服务端socket */
     public array $serverSocket = [];
+
 
     /** 初始化 */
     public function __construct()
@@ -246,7 +206,6 @@ class RtmpDemo
         } else {
             $listeningAddress = $this->protocol . '://' . $this->host . ':' . $this->port;
         }
-
         echo "开始监听{$listeningAddress}\r\n";
         /** 不验证https证书 */
         $contextOptions['ssl'] = ['verify_peer' => false, 'verify_peer_name' => false];
@@ -266,7 +225,11 @@ class RtmpDemo
         $this->serverSocket[(int)$socket] = $socket;
     }
 
-    public function startFlv()
+    /**
+     * 开启flv播放服务
+     * @return void
+     */
+    public function createFlvSever()
     {
         /** @var string $listeningAddress 拼接监听地址 */
         if ($this->listeningAddress) {
@@ -291,7 +254,7 @@ class RtmpDemo
         self::$allSocket[(int)$socket] = $socket;
         /** 单独保存服务端 */
         $this->serverSocket[(int)$socket] = $socket;
-
+        /** 保存flv服务端的socket */
         self::$flvServerSocket = $socket;
     }
 
@@ -310,18 +273,29 @@ class RtmpDemo
     /** 启动服务 */
     public function start()
     {
-        if ($this->onWorkerStart){
-            call_user_func($this->onWorkerStart,$this);
-        }
+        $this->startRtmp = function (\Root\rtmp\TcpConnection $connection){
+            /** 将传递进来的数据解码 */
+            new \MediaServer\Rtmp\RtmpStream(
+                new \MediaServer\Utils\WMBufferStream($connection)
+            );
+        };
+        /** 启动flv服务 */
+        $this->startFlv();
         /** 调试模式 */
         $this->accept();
     }
 
+    /**
+     * 启动flv服务
+     * @return void
+     * @comment 就是再添加一个监听地址
+     */
+    public function startFlv()
+    {
+        new \MediaServer\Http\HttpWMServer("\\MediaServer\\Http\\ExtHttpProtocol://0.0.0.0:18080",$this);
+    }
 
-    /** 所有的flv播放器客戶端 */
-    public static array $flvClients = [];
-    /** flv服務端 */
-    public static $flvServerSocket = null;
+
     /** 接收客户端消息 */
     private function accept()
     {
@@ -358,23 +332,21 @@ class RtmpDemo
                             self::$flvClients[(int)$clientSocket] = $clientSocket;
                         }
                         //触发事件的连接的回调
-                        /** 如果这个客户端连接不为空，并且本服务的onConnect是回调函数 */
-                        if (!empty($clientSocket) && is_callable($this->onConnect)) {
-                            /** 把客户端连接传递到onConnect回调函数 */
+                        /** 如果这个客户端连接不为空，并且本服务的startRtmp是回调函数 */
+                        if (!empty($clientSocket) && is_callable($this->startRtmp)) {
+                            /** 把客户端连接传递到startRtmp回调函数 */
                             try {
                                 $connection = new TcpConnection($clientSocket, $remote_address);
                                 $connection->protocol               = $this->protocol;
-                                //$connection->protocol               = "\MediaServer\Http\ExtHttpProtocol";
                                 $connection->transport              = $this->transport;
                                 /** 支持http的flv播放 */
                                 $connection->onMessage              = $this->onMessage;
                                 /** 支持ws的flv播放 */
                                 $connection->onWebSocketConnect = $this->onWebSocketConnect;
-                                call_user_func($this->onConnect, $connection);
+                                call_user_func($this->startRtmp, $connection);
                             } catch (\Exception|\RuntimeException $exception) {
-                                self::dumpError($exception);
+                                var_dump($exception->getMessage());
                             }
-
                         }
                         /** 将这个客户端连接保存，目测这里如果不保存，应该是无法发送和接收消息的，就是要把所有的连接都保存在内存中 */
                         RtmpDemo::$allSocket[(int)$clientSocket] = $clientSocket;
@@ -403,18 +375,4 @@ class RtmpDemo
             }
         }
     }
-
-
-    /**
-     * 打印系统异常信息
-     * @param $exception
-     * @return void
-     * @note 应该记录到日志的
-     */
-    private static function dumpError($exception)
-    {
-        //var_dump("发生错误",$exception->getCode(),$exception->getFile(),$exception->getLine(),$exception->getMessage());
-        dump_error($exception);
-    }
-
 }
