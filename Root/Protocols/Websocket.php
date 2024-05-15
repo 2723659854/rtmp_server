@@ -266,7 +266,7 @@ class Websocket implements ProtocolInterface
             if (\strlen($connection->context->tmpWebsocketData) > $connection->maxSendBufferSize) {
                 if ($connection->onError) {
                     try {
-                        ($connection->onError)($connection, 0, 'send buffer full and drop package');
+                        ($connection->onError)($connection, ConnectionInterface::SEND_FAIL, 'send buffer full and drop package');
                     } catch (\Throwable $e) {
                         
                         var_dump($e->getMessage());
