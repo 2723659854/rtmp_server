@@ -570,10 +570,6 @@ class TcpConnection extends ConnectionInterface
 
             /** 這裡的協議出現了問題 */
             $parser = $this->protocol;
-            /** 如果是flv客戶端，手動切換協議 */
-            if (in_array($socket,RtmpDemo::$flvClients)){
-                $parser = \MediaServer\Http\ExtHttpProtocol::class;
-            }
             /** 如果有数据 */
             while ($this->_recvBuffer !== '' && !$this->_isPaused) {
                 // The current packet length is known.

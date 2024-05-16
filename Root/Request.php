@@ -1,6 +1,5 @@
 <?php
 namespace Root;
-use Root\Lib\UploadFile;
 
 /**
  * @purpose 默认的http请求解析类
@@ -83,63 +82,6 @@ class Request extends \Root\Lib\BaseRequest
         return $all;
     }
 
-    /**
-     * File
-     * @param string|null $name
-     * @return null|UploadFile[]|UploadFile
-     */
-    public function file($name = null)
-    {
-        $files = parent::file($name);
-        if (null === $files) {
-            return $name === null ? [] : null;
-        }
-        if ($name !== null) {
-            // Multi files
-            if (is_array(current($files))) {
-                return $this->parseFiles($files);
-            }
-            return $this->parseFile($files);
-        }
-        $uploadFiles = [];
-        foreach ($files as $name => $file) {
-            // Multi files
-            if (is_array(current($file))) {
-                $uploadFiles[$name] = $this->parseFiles($file);
-            } else {
-                $uploadFiles[$name] = $this->parseFile($file);
-            }
-        }
-        return $uploadFiles;
-    }
-
-    /**
-     * ParseFile
-     * @param array $file
-     * @return UploadFile
-     */
-    protected function parseFile(array $file): UploadFile
-    {
-        return new UploadFile($file['tmp_name'], $file['name'], $file['type'], $file['error']);
-    }
-
-    /**
-     * ParseFiles
-     * @param array $files
-     * @return array
-     */
-    protected function parseFiles(array $files): array
-    {
-        $uploadFiles = [];
-        foreach ($files as $key => $file) {
-            if (is_array(current($file))) {
-                $uploadFiles[$key] = $this->parseFiles($file);
-            } else {
-                $uploadFiles[$key] = $this->parseFile($file);
-            }
-        }
-        return $uploadFiles;
-    }
 
     /**
      * GetRemoteIp

@@ -6,10 +6,9 @@ namespace Root\Protocols;
 use Root\rtmp\ProtocolInterface;
 use Root\rtmp\ConnectionInterface;
 use Root\rtmp\TcpConnection;
-use Root\Request;
 
 /**
- * WebSocket protocol.
+ * @purpose WebSocket 协议
  */
 class Websocket implements ProtocolInterface
 {

@@ -2,8 +2,6 @@
 
 namespace Root\Lib;
 
-use Root\Lib\Session;
-
 /**
  * @purpose session处理函数
  */

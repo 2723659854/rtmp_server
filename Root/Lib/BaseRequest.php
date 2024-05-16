@@ -152,21 +152,6 @@ class BaseRequest
         return isset($this->_data['cookie'][$name]) ? $this->_data['cookie'][$name] : $default;
     }
 
-    /**
-     * 获取上传的文件
-     * @param string|null $name
-     * @return array|null
-     */
-    public function file($name = null)
-    {
-        if (!isset($this->_data['files'])) {
-            $this->parsePost();
-        }
-        if (null === $name) {
-            return $this->_data['files'];
-        }
-        return isset($this->_data['files'][$name]) ? $this->_data['files'][$name] : null;
-    }
 
     /**
      * 获取请求方法
@@ -432,8 +417,7 @@ class BaseRequest
         $this->_data['post'] = $this->_data['files'] = array();
         $content_type = $this->header('content-type', '');
         if (\preg_match('/boundary="?(\S+)"?/', $content_type, $match)) {
-            $http_post_boundary = '--' . $match[1];
-            $this->parseUploadFiles($http_post_boundary);
+            //todo 删除解析文件
             return;
         }
         $body_buffer = $this->rawBody();
@@ -458,121 +442,7 @@ class BaseRequest
         }
     }
 
-    /**
-     * 解析上传的文件
-     * @param string $http_post_boundary
-     * @return void
-     */
-    protected function parseUploadFiles($http_post_boundary)
-    {
-        $http_post_boundary = \trim($http_post_boundary, '"');
-        $buffer = $this->_buffer;
-        $post_encode_string = '';
-        $files_encode_string = '';
-        $files = [];
-        $boday_position = strpos($buffer, "\r\n\r\n") + 4;
-        $offset = $boday_position + strlen($http_post_boundary) + 2;
-        $max_count = static::$maxFileUploads;
-        while ($max_count-- > 0 && $offset) {
-            $offset = $this->parseUploadFile($http_post_boundary, $offset, $post_encode_string, $files_encode_string, $files);
-        }
-        if ($post_encode_string) {
-            parse_str($post_encode_string, $this->_data['post']);
-        }
 
-        if ($files_encode_string) {
-            parse_str($files_encode_string, $this->_data['files']);
-            \array_walk_recursive($this->_data['files'], function (&$value) use ($files) {
-                $value = $files[$value];
-            });
-        }
-    }
-
-    /**
-     * 解析上传的文件
-     * @param string $boundary 分割线
-     * @param int $section_start_offset 偏移量
-     * @return int
-     */
-    protected function parseUploadFile($boundary, $section_start_offset, &$post_encode_string, &$files_encode_str, &$files)
-    {
-        $file = [];
-        $boundary = "\r\n$boundary";
-        if (\strlen($this->_buffer) < $section_start_offset) {
-            return 0;
-        }
-        $section_end_offset = \strpos($this->_buffer, $boundary, $section_start_offset);
-        if (!$section_end_offset) {
-            return 0;
-        }
-        $content_lines_end_offset = \strpos($this->_buffer, "\r\n\r\n", $section_start_offset);
-        if (!$content_lines_end_offset || $content_lines_end_offset + 4 > $section_end_offset) {
-            return 0;
-        }
-        $content_lines_str = \substr($this->_buffer, $section_start_offset, $content_lines_end_offset - $section_start_offset);
-        $content_lines = \explode("\r\n", trim($content_lines_str . "\r\n"));
-        $boundary_value = \substr($this->_buffer, $content_lines_end_offset + 4, $section_end_offset - $content_lines_end_offset - 4);
-        $upload_key = false;
-        foreach ($content_lines as $content_line) {
-            if (!\strpos($content_line, ': ')) {
-                return 0;
-            }
-            list($key, $value) = \explode(': ', $content_line);
-            switch (strtolower($key)) {
-                case "content-disposition":
-                    // Is file data.
-                    if (\preg_match('/name="(.*?)"; filename="(.*?)"/i', $value, $match)) {
-                        $error = 0;
-                        $tmp_file = '';
-                        $file_name = $match[2];
-                        $size = \strlen($boundary_value);
-
-                        $tmp_upload_dir = phar_app_path().'/public';
-                        is_dir($tmp_upload_dir)||mkdir($tmp_upload_dir,0777,true);
-                        if (!$tmp_upload_dir) {
-                            $error = UPLOAD_ERR_NO_TMP_DIR;
-                        } else if ($boundary_value === '' && $file_name === '') {
-                            $error = UPLOAD_ERR_NO_FILE;
-                        } else {
-                            //$tmp_file = \tempnam($tmp_upload_dir, 'xiaosongshu');
-                            $tmp_file = $tmp_upload_dir.'/'.md5(time().rand(1000,9999));
-                            if ($tmp_file === false || false === \file_put_contents($tmp_file, $boundary_value)) {
-                                $error = UPLOAD_ERR_CANT_WRITE;
-                            }
-                        }
-                        $upload_key = $match[1];
-                        // Parse upload files.
-                        $file = [
-                            'name' => $file_name,
-                            'tmp_name' => $tmp_file,
-                            'size' => $size,
-                            'error' => $error,
-                            'type' => '',
-                        ];
-                        break;
-                    } // Is post field.
-                    else {
-                        // Parse $_POST.
-                        if (\preg_match('/name="(.*?)"$/', $value, $match)) {
-                            $k = $match[1];
-                            $post_encode_string .= \urlencode($k) . "=" . \urlencode($boundary_value) . '&';
-                        }
-                        return $section_end_offset + \strlen($boundary) + 2;
-                    }
-                    break;
-                case "content-type":
-                    $file['type'] = \trim($value);
-                    break;
-            }
-        }
-        if ($upload_key === false) {
-            return 0;
-        }
-        $files_encode_str .= \urlencode($upload_key) . '=' . \count($files) . '&';
-        $files[] = $file;
-
-        return $section_end_offset + \strlen($boundary) + 2;
-    }
 
     /**
      * 创建一个sessionID

@@ -54,9 +54,6 @@ class RtmpDemo
     /** 写事件 */
     private array $_writeFds = [];
 
-    /** 所有的flv播放器客戶端 不可手动修改，否则影响flv数据传输 */
-    public static array $flvClients = [];
-
     /** flv服務端 */
     private static $flvServerSocket = null;
 
@@ -293,22 +290,28 @@ class RtmpDemo
                     if (in_array($fd, $this->serverSocket)) {
                         /** 读取服务端接收到的 消息，这个消息的内容是客户端连接 ，stream_socket_accept方法负责接收客户端连接 */
                         $clientSocket = stream_socket_accept($fd, 0, $remote_address); //阻塞监听 设置超时0，并获取客户端地址
+                        /** 判断是否是flv链接 默认为否 */
+                        $isFlv = false;
                         /** 把flv的客戶端單獨保存有用，后面解码数据的时候，需要手动切换协议 */
                         if (self::$flvServerSocket && $fd == self::$flvServerSocket) {
-                            self::$flvClients[(int)$clientSocket] = $clientSocket;
+                            $isFlv = true;
                         }
                         /** 如果这个客户端连接不为空 */
                         if (!empty($clientSocket)) {
                             try {
                                 /** 使用tcp解码器 */
                                 $connection = new TcpConnection($clientSocket, $remote_address);
+                                /** 如果是flv的链接 就设置为http的协议 */
+                                if ($isFlv == true){
+                                    $connection->protocol = \MediaServer\Http\ExtHttpProtocol::class;
+                                }
                                 /** 通信协议 */
                                 $connection->transport = $this->transport;
                                 /** 支持http的flv播放 */
                                 $connection->onMessage = $this->onMessage;
                                 /** 支持ws的flv播放 */
                                 $connection->onWebSocketConnect = $this->onWebSocketConnect;
-                                /** 处理rtmp链接事件 */
+                                /** 处理rtmp链接的数据 */
                                 new \MediaServer\Rtmp\RtmpStream(
                                 /** 使用自定义协议处理传递过来的数据 */
                                     new \MediaServer\Utils\WMBufferStream($connection)

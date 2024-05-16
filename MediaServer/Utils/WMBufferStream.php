@@ -28,7 +28,10 @@ class WMBufferStream implements  EventEmitterInterface
     public function  __construct($connection){
         $this->connection = $connection;
         /** 当tcp数据传输进来之后，在这里更换为当前的wmbuffer协议，然后connection对象读取数据的时候会使用本协议的input方法 是tcpConnection.php 的 baseRead 方法调用的 */
-        $this->connection->protocol = $this;
+        /** 就不更改协议了，默认的rtmp必须使用本协议 */
+        if (!$this->connection->protocol){
+            $this->connection->protocol = $this;
+        }
         $this->connection->onClose = [$this,'_onClose'];
         $this->connection->onError = [$this,'_onError'];
     }
