@@ -3,4 +3,5 @@
 /composer.lock
 .htaccess
 nginx.htaccess
+*.mp4
 
