@@ -567,8 +567,7 @@ class TcpConnection extends ConnectionInterface
         }
         /** 获取这个链接的通信协议 */
         if ($this->protocol !== null) {
-
-            /** 這裡的協議出現了問題 */
+            /** 获取链接的协议， */
             $parser = $this->protocol;
             /** 如果有数据 */
             while ($this->_recvBuffer !== '' && !$this->_isPaused) {
@@ -582,12 +581,12 @@ class TcpConnection extends ConnectionInterface
                 } else {
                     // Get current package length.
                     try {
-                        /** 检查包的完整性 */
+                        /** 检查包的完整性 如果是rtmp协议，那么这里返回了0 */
                         $this->_currentPackageLength = $parser::input($this->_recvBuffer, $this);
                     } catch (\Exception $e) {}
                     // The packet length is unknown.
                     /** 如果返回的是0 则需要读取更多的数据，就是客户端数据还没有发送完，还不知道包的长度是多少 */
-                    if ($this->_currentPackageLength === 0) {
+                    if ($this->_currentPackageLength === 0) {/** rtmp协议，已经截获了数据 ，返回0 程序走到这里就，数据被WMBufferStream触发ondata事件来处理 */
                         break;
                         /** 包长度小于 系统设定最大包长度 */
                     } elseif ($this->_currentPackageLength > 0 && $this->_currentPackageLength <= $this->maxPackageSize) {
@@ -627,7 +626,7 @@ class TcpConnection extends ConnectionInterface
                     continue;
                 }
                 try {
-                    /** 先对数据解码 调用这个协议定义的回调事件处理逻辑 */
+                    /** 先对数据解码 调用这个协议定义的回调事件处理逻辑 实际上在建立链接的时候就定义了数据处理回调函数 flv数据将会调用HttpWMServer的onHttpRequest函数处理数据 */
                     // Decode request buffer before Emitting onMessage callback.
                     \call_user_func($this->onMessage, $this, $parser::decode($one_request_buffer, $this));
                 } catch (\Exception $e) {
@@ -637,44 +636,58 @@ class TcpConnection extends ConnectionInterface
             return;
         }
 
+        /** 如果没有接收到数据 或者暂停接收链接的数据则结束 */
         if ($this->_recvBuffer === '' || $this->_isPaused) {
             return;
         }
 
-        // Applications protocol is not set.
+        /** 以下是没有设置协议的流程  */
+
+        /** 请求数 +1 */
         ++self::$statistics['total_request'];
+        /** 如果没有设置数据处理回调函数，则程序结束 并且清空暂存区 */
         if (!$this->onMessage) {
             $this->_recvBuffer = '';
             return;
         }
+        /** 如果设置了数据处理回调函数，则处理业务逻辑，没有定义协议则不校验数据包长度，不对原始数据解码 */
         try {
             \call_user_func($this->onMessage, $this, $this->_recvBuffer);
         } catch (\Exception $e) {
             var_dump($e->getMessage());
         }
-        // Clean receive buffer.
+        /** 清空暂存区  */
         $this->_recvBuffer = '';
     }
 
     /**
-     * Base write handler.
-     *
+     * 发送数据业务逻辑
      * @return void|bool
+     * @comment 此方法用于io多路复用模型的可写事件调用
      */
     public function baseWrite()
     {
+        /** 屏蔽异常 */
         \set_error_handler(function(){});
+        /** 如果是ssl加密 直接发送8192个字节 */
         if ($this->transport === 'ssl') {
             $len = @\fwrite($this->_socket, $this->_sendBuffer, 8192);
         } else {
+            /** 否则一次全部发送 */
             $len = @\fwrite($this->_socket, $this->_sendBuffer);
         }
+        /** 还原异常处理 */
         \restore_error_handler();
+        /** 如果已经全部发送完毕 */
         if ($len === \strlen($this->_sendBuffer)) {
+            /** 更新已发数据长度 */
             $this->bytesWritten += $len;
+            /** 删除写事件 */
             RtmpDemo::instance()->del($this->_socket, EventInterface::EV_WRITE);
+            /** 清空暂存区 */
             $this->_sendBuffer = '';
             // Try to emit onBufferDrain callback when the send buffer becomes empty.
+            /** 出发暂存区空闲事件 */
             if ($this->onBufferDrain) {
                 try {
                     \call_user_func($this->onBufferDrain, $this);
@@ -683,23 +696,26 @@ class TcpConnection extends ConnectionInterface
                     var_dump($e->getMessage());
                 }
             }
+            /** 如果链接已经关闭，则销毁链接 */
             if ($this->_status === self::STATUS_CLOSING) {
                 $this->destroy();
             }
             return true;
         }
+        /** 只发送了部分数据 */
         if ($len > 0) {
+            /** 更新已发送数据长度 并且更新暂存区数据 */
             $this->bytesWritten += $len;
             $this->_sendBuffer = \substr($this->_sendBuffer, $len);
         } else {
+            /** 发送失败，直接销毁链接 */
             ++self::$statistics['send_fail'];
             $this->destroy();
         }
     }
 
     /**
-     * SSL handshake.
-     *
+     * ssl握手
      * @param resource $socket
      * @return bool
      */
@@ -708,30 +724,38 @@ class TcpConnection extends ConnectionInterface
     }
 
     /**
-     * This method pulls all the data out of a readable stream, and writes it to the supplied destination.
-     *
-     * @param self $dest
+     * 读取数据流中的数据，然后发送到目的客户端
+     * @param self $dest 目的客户端
      * @return void
+     * @comment  转发请求
      */
     public function pipe(self $dest)
     {
         $source              = $this;
+        /** 当本服务器接收到数据后 */
         $this->onMessage     = function ($source, $data) use ($dest) {
+            /** 发送数据给目标客户端 */
             $dest->send($data);
         };
+        /** 本服务关闭 */
         $this->onClose       = function ($source) use ($dest) {
+            /** 关闭目标客户端 */
             $dest->close();
         };
+        /** 目标客户端暂存区已满 */
         $dest->onBufferFull  = function ($dest) use ($source) {
+            /** 本服务器暂停接收数据 */
             $source->pauseRecv();
         };
+        /** 客户端暂存区空闲 */
         $dest->onBufferDrain = function ($dest) use ($source) {
+            /** 本服务器恢复接收数据 */
             $source->resumeRecv();
         };
     }
 
     /**
-     * Remove $length of data from receive buffer.
+     * 更新暂存区数据
      *
      * @param int $length
      * @return void
@@ -742,14 +766,14 @@ class TcpConnection extends ConnectionInterface
     }
 
     /**
-     * Close connection.
-     *
+     * 关闭链接
      * @param mixed $data
      * @param bool $raw
      * @return void
      */
     public function close($data = null, $raw = false)
     {
+        /** 关闭中直接销毁 */
         if($this->_status === self::STATUS_CONNECTING){
             $this->destroy();
             return;
@@ -759,6 +783,7 @@ class TcpConnection extends ConnectionInterface
             return;
         }
 
+        /** 发送最后的数据 */
         if ($data !== null) {
             $this->send($data, $raw);
         }
@@ -773,7 +798,7 @@ class TcpConnection extends ConnectionInterface
     }
 
     /**
-     * Get the real socket.
+     * 获取socket链接
      *
      * @return resource
      */
@@ -783,7 +808,7 @@ class TcpConnection extends ConnectionInterface
     }
 
     /**
-     * Check whether the send buffer will be full.
+     * 检查发送暂存区数据是否已满
      *
      * @return void
      */
@@ -802,7 +827,7 @@ class TcpConnection extends ConnectionInterface
     }
 
     /**
-     * Whether send buffer is full.
+     * 检查暂存区是否溢出
      *
      * @return bool
      */
@@ -823,7 +848,7 @@ class TcpConnection extends ConnectionInterface
     }
 
     /**
-     * Whether send buffer is Empty.
+     * 暂存区是否为空
      *
      * @return bool
      */
@@ -833,7 +858,7 @@ class TcpConnection extends ConnectionInterface
     }
 
     /**
-     * Destroy connection.
+     * 销毁链接
      *
      * @return void
      */
@@ -843,10 +868,12 @@ class TcpConnection extends ConnectionInterface
         if ($this->_status === self::STATUS_CLOSED) {
             return;
         }
+        /** 移除所有的监听事件 */
         // Remove event listener.
         RtmpDemo::instance()->del($this->_socket, EventInterface::EV_READ);
         RtmpDemo::instance()->del($this->_socket, EventInterface::EV_WRITE);
 
+        /** 关闭链接socket */
         // Close socket.
         try {
             @\fclose($this->_socket);
@@ -856,6 +883,7 @@ class TcpConnection extends ConnectionInterface
 
         $this->_status = self::STATUS_CLOSED;
         // Try to emit onClose callback.
+        /** 出发关闭回调函数 */
         if ($this->onClose) {
             try {
                 \call_user_func($this->onClose, $this);
@@ -864,6 +892,7 @@ class TcpConnection extends ConnectionInterface
                 var_dump($e->getMessage());
             }
         }
+        /** 出发协议的关闭事件 */
         // Try to emit protocol::onClose
         if ($this->protocol && \method_exists($this->protocol, 'onClose')) {
             try {
@@ -872,12 +901,15 @@ class TcpConnection extends ConnectionInterface
                 var_dump($e->getMessage());
             }
         }
+        /** 清空暂存区 和相关状态 */
         $this->_sendBuffer = $this->_recvBuffer = '';
         $this->_currentPackageLength = 0;
         $this->_isPaused = $this->_sslHandshakeCompleted = false;
         if ($this->_status === self::STATUS_CLOSED) {
             // Cleaning up the callback to avoid memory leaks.
+            /** 清空所有回调函数 */
             $this->onMessage = $this->onClose = $this->onError = $this->onBufferFull = $this->onBufferDrain = null;
+            /** 删除这个链接的信息 */
             if ($this->worker) {
                 unset($this->worker->connections[$this->_id]);
             }

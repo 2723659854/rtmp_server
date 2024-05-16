@@ -307,9 +307,9 @@ class RtmpDemo
                                 }
                                 /** 通信协议 */
                                 $connection->transport = $this->transport;
-                                /** 支持http的flv播放 */
+                                /** 支持http的flv播放 这个onMessage事件在创建flv服务器的时候被定义过 */
                                 $connection->onMessage = $this->onMessage;
-                                /** 支持ws的flv播放 */
+                                /** 支持ws的flv播放 这个也是在创建flv服务器的时候被定义过 */
                                 $connection->onWebSocketConnect = $this->onWebSocketConnect;
                                 /** 处理rtmp链接的数据 */
                                 new \MediaServer\Rtmp\RtmpStream(
