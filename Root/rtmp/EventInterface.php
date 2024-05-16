@@ -2,95 +2,21 @@
 
 namespace Root\rtmp;
 
+/**
+ * @purpose 这个是IO模型的事件接口
+ * @comment 这里只需要两个读和写事件
+ */
 interface EventInterface
 {
     /**
-     * Read event.
-     *
+     * 可读事件
      * @var int
      */
     const EV_READ = 1;
 
     /**
-     * Write event.
-     *
+     * 可写事件
      * @var int
      */
     const EV_WRITE = 2;
-
-    /**
-     * Except event
-     *
-     * @var int
-     */
-    const EV_EXCEPT = 3;
-
-    /**
-     * Signal event.
-     *
-     * @var int
-     */
-    const EV_SIGNAL = 4;
-
-    /**
-     * Timer event.
-     *
-     * @var int
-     */
-    const EV_TIMER = 8;
-
-    /**
-     * Timer once event.
-     *
-     * @var int
-     */
-    const EV_TIMER_ONCE = 16;
-
-    /**
-     * Add event listener to event loop.
-     *
-     * @param mixed    $fd
-     * @param int      $flag
-     * @param callable $func
-     * @param array    $args
-     * @return bool
-     */
-    public function add($fd, $flag, $func, $args = array());
-
-    /**
-     * Remove event listener from event loop.
-     *
-     * @param mixed $fd
-     * @param int   $flag
-     * @return bool
-     */
-    public function del($fd, $flag);
-
-    /**
-     * Remove all timers.
-     *
-     * @return void
-     */
-    public function clearAllTimer();
-
-    /**
-     * Main loop.
-     *
-     * @return void
-     */
-    public function loop();
-
-    /**
-     * Destroy loop.
-     *
-     * @return mixed
-     */
-    public function destroy();
-
-    /**
-     * Get Timer count.
-     *
-     * @return mixed
-     */
-    public function getTimerCount();
 }

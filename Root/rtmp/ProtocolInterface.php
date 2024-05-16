@@ -3,16 +3,12 @@
 namespace Root\rtmp;
 
 /**
- * Protocol interface
+ * @purpose 协议接口类
  */
 interface ProtocolInterface
 {
     /**
-     * Check the integrity of the package.
-     * Please return the length of package.
-     * If length is unknow please return 0 that mean wating more data.
-     * If the package has something wrong please return false the connection will be closed.
-     *
+     * 检查包的完整性，需要返回包的长度，如果返回0则表示需要读取更多的数据，如果发送了错误，那么返回false，客户端链接会被关闭
      * @param string              $recv_buffer
      * @param ConnectionInterface $connection
      * @return int|false
@@ -20,8 +16,7 @@ interface ProtocolInterface
     public static function input($recv_buffer, ConnectionInterface $connection);
 
     /**
-     * Decode package and emit onMessage($message) callback, $message is the result that decode returned.
-     *
+     * 在接收到数据后，需要解码，调用回调onMessage函数来处理业务逻辑，
      * @param string              $recv_buffer
      * @param ConnectionInterface $connection
      * @return mixed
@@ -29,8 +24,7 @@ interface ProtocolInterface
     public static function decode($recv_buffer, ConnectionInterface $connection);
 
     /**
-     * Encode package brefore sending to client.
-     * 
+     * 向客户端发送数据的时候需要先编码
      * @param mixed               $data
      * @param ConnectionInterface $connection
      * @return string

@@ -13,8 +13,7 @@ use Root\Lib\Session;
 class Http
 {
     /**
-     * Request class name.
-     *
+     * 默认解析类
      * @var string
      */
     protected static $_requestClass = 'Root\Request';
@@ -34,8 +33,7 @@ class Http
     protected static $_enableCache = true;
 
     /**
-     * Get or set session name.
-     *
+     * 设置获取session名
      * @param string|null $name
      * @return string
      */
@@ -48,8 +46,7 @@ class Http
     }
 
     /**
-     * Get or set the request class name.
-     *
+     * 获取或者设置请求解析类
      * @param string|null $class_name
      * @return string
      */
@@ -62,8 +59,7 @@ class Http
     }
 
     /**
-     * Enable or disable Cache.
-     *
+     * 开启或者关闭缓存
      * @param mixed $value
      */
     public static function enableCache($value)
@@ -73,7 +69,7 @@ class Http
 
     /**
      * Check the integrity of the package.
-     *
+     * 检查包的完整性
      * @param string $recv_buffer
      * @param TcpConnection $connection
      * @return int
@@ -81,11 +77,14 @@ class Http
     public static function input($recv_buffer, TcpConnection $connection)
     {
         static $input = [];
+        /** 长度没有超过512，并且已经有解析，直接返回缓存的解析数据 */
         if (!isset($recv_buffer[512]) && isset($input[$recv_buffer])) {
             return $input[$recv_buffer];
         }
+        /** 读取分隔符位置 */
         $crlf_pos = \strpos($recv_buffer, "\r\n\r\n");
         if (false === $crlf_pos) {
+            /** 包太大了 */
             // Judge whether the package length exceeds the limit.
             if (\strlen($recv_buffer) >= 16384) {
                 $connection->close("HTTP/1.1 413 Request Entity Too Large\r\n\r\n", true);
@@ -93,16 +92,18 @@ class Http
             }
             return 0;
         }
-
+        /** 计算长度 */
         $length = $crlf_pos + 4;
+        /** 获取请求方法 */
         $method = \strstr($recv_buffer, ' ', true);
-
+        /** 不支持的请求方法 */
         if (!\in_array($method, ['GET', 'POST', 'OPTIONS', 'HEAD', 'DELETE', 'PUT', 'PATCH'])) {
             $connection->close("HTTP/1.1 400 Bad Request\r\n\r\n", true);
             return 0;
         }
-
+        /** 解析头部 */
         $header = \substr($recv_buffer, 0, $crlf_pos);
+        /** 获取body长度 */
         if ($pos = \strpos($header, "\r\nContent-Length: ")) {
             $length = $length + (int)\substr($header, $pos + 18, 10);
             $has_content_length = true;
@@ -116,14 +117,14 @@ class Http
                 return 0;
             }
         }
-
+        /** 包长度大于协议允许的最大长度 */
         if ($has_content_length) {
             if ($length > $connection->maxPackageSize) {
                 $connection->close("HTTP/1.1 413 Request Entity Too Large\r\n\r\n", true);
                 return 0;
             }
         }
-
+        /** 如果长度大于512 ,清空缓存 */
         if (!isset($recv_buffer[512])) {
             $input[$recv_buffer] = $length;
             if (\count($input) > 512) {
@@ -144,6 +145,7 @@ class Http
     public static function decode($recv_buffer, TcpConnection $connection)
     {
         static $requests = array();
+        /** 如果有缓存，直接返回缓存 */
         $cacheable = static::$_enableCache && !isset($recv_buffer[512]);
         if (true === $cacheable && isset($requests[$recv_buffer])) {
             $request = $requests[$recv_buffer];
@@ -152,6 +154,7 @@ class Http
             $request->properties = array();
             return $request;
         }
+        /** 解码数据并缓存 */
         $request = new static::$_requestClass($recv_buffer);
         $request->connection = $connection;
         $connection->__request = $request;

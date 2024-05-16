@@ -3,14 +3,13 @@
 namespace Root\rtmp;
 
 /**
- * ConnectionInterface.
+ * @purpose 链接接口类
  */
 #[\AllowDynamicProperties]
 abstract class  ConnectionInterface
 {
     /**
-     * Statistics for status command.
-     *
+     * 状态命令
      * @var array
      */
     public static $statistics = array(
@@ -21,93 +20,80 @@ abstract class  ConnectionInterface
     );
 
     /**
-     * Emitted when data is received.
-     *
+     * 接收到消息回调事件
      * @var callable
      */
     public $onMessage = null;
 
     /**
-     * Emitted when the other end of the socket sends a FIN packet.
-     *
+     * 当发送tcp数据包的FIN的时候触发这个回调事件
      * @var callable
      */
     public $onClose = null;
 
     /**
-     * Emitted when an error occurs with connection.
-     *
+     * 当客户端链接发生错误的时候触发这个回调
      * @var callable
      */
     public $onError = null;
 
     /**
-     * Sends data on the connection.
-     *
+     * 给客户端发送数据
      * @param mixed $send_buffer
      * @return void|boolean
      */
     abstract public function send($send_buffer);
 
     /**
-     * Get remote IP.
-     *
+     * 获取客户端IP
      * @return string
      */
     abstract public function getRemoteIp();
 
     /**
-     * Get remote port.
-     *
+     * 获取客户端端口
      * @return int
      */
     abstract public function getRemotePort();
 
     /**
-     * Get remote address.
-     *
+     * 获取客户端地址
      * @return string
      */
     abstract public function getRemoteAddress();
 
     /**
-     * Get local IP.
-     *
+     * 获取本机IP
      * @return string
      */
     abstract public function getLocalIp();
 
     /**
-     * Get local port.
-     *
+     * 获取本机端口
      * @return int
      */
     abstract public function getLocalPort();
 
     /**
-     * Get local address.
-     *
+     * 获取本机地址
      * @return string
      */
     abstract public function getLocalAddress();
 
     /**
-     * Is ipv4.
-     *
+     * 是否ip4地址
      * @return bool
      */
     abstract public function isIPv4();
 
     /**
-     * Is ipv6.
-     *
+     * 是否IP6地址
      * @return bool
      */
     abstract public function isIPv6();
 
     /**
-     * Close connection.
-     *
+     * 关闭客户端
      * @param string|null $data
      * @return void
      */

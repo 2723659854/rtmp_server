@@ -2,6 +2,9 @@
 namespace Root;
 use Root\Lib\UploadFile;
 
+/**
+ * @purpose 默认的http请求解析类
+ */
 class Request extends \Root\Lib\BaseRequest
 {
     /**
