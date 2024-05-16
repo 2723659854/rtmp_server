@@ -4,19 +4,19 @@ namespace Root\Protocols\Http;
 
 
 /**
- * Class Chunk
+ * @purpose 数据切片类
  */
 class Chunk
 {
     /**
-     * Chunk buffer.
+     * 切片中的数据
      *
      * @var string
      */
     protected $_buffer = null;
 
     /**
-     * Chunk constructor.
+     * 初始化
      * @param string $buffer
      */
     public function __construct($buffer)
@@ -26,8 +26,9 @@ class Chunk
 
     /**
      * __toString
-     *
+     * 当发送数据的时候，拼接数据的长度
      * @return string
+     * @comment 长度是10进制转16进制
      */
     public function __toString()
     {

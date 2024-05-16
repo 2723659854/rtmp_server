@@ -1,57 +1,57 @@
 <?php
 namespace Root\Lib;
 
+/**
+ * @purpose 请求类基类
+ */
 class BaseRequest
 {
     /**
-     * Connection.
-     *
+     * 链接
      * @var
      */
     public $connection = null;
 
     /**
-     * Session instance.
-     *
+     * Session
      * @var
      */
     public $session = null;
 
     /**
-     * Properties.
-     *
+     * 属性
      * @var array
      */
     public $properties = array();
 
     /**
-     * @var int
+     * @var int 最大上传数量
      */
     public static $maxFileUploads = 1024;
 
     /**
-     * Http buffer.
+     * Http buffer. 缓存的原始数据
      *
      * @var string
      */
     protected $_buffer = null;
 
     /**
-     * Request data.
+     * Request data. 携带的数据
      *
      * @var array
      */
     protected $_data = null;
 
     /**
-     * Enable cache.
+     * Enable cache. 开启缓存
      *
      * @var bool
      */
     protected static $_enableCache = true;
 
     /**
-     * Is safe.
+     * 是否安全
      *
      * @var bool
      */
@@ -61,9 +61,10 @@ class BaseRequest
     public $remote_address = null;
 
     /**
-     * Request constructor.
+     * 构造函数，初始化
      *
-     * @param string $buffer
+     * @param string $buffer 原始数据
+     * @param string $remote_address 客户端地址
      */
     public function __construct($buffer='',$remote_address='')
     {
@@ -73,7 +74,7 @@ class BaseRequest
 
     /**
      * $_GET.
-     *
+     * 获取get方法传递的参数
      * @param string|null $name
      * @param mixed|null $default
      * @return mixed|null
@@ -91,7 +92,7 @@ class BaseRequest
 
     /**
      * $_POST.
-     *
+     * 获取post方法传递的某一个参数
      * @param string|null $name
      * @param mixed|null $default
      * @return mixed|null
@@ -108,7 +109,7 @@ class BaseRequest
     }
 
     /**
-     * ALL
+     * 获取get + post 的所有参数
      * @return mixed|null
      */
     public function all(){
@@ -116,8 +117,7 @@ class BaseRequest
     }
 
     /**
-     * Get header item by name.
-     *
+     * 获取header头部传递的数据
      * @param string|null $name
      * @param mixed|null $default
      * @return array|string|null
@@ -135,8 +135,7 @@ class BaseRequest
     }
 
     /**
-     * Get cookie item by name.
-     *
+     * 获取cookie
      * @param string|null $name
      * @param mixed|null $default
      * @return array|string|null
@@ -154,8 +153,7 @@ class BaseRequest
     }
 
     /**
-     * Get upload files.
-     *
+     * 获取上传的文件
      * @param string|null $name
      * @return array|null
      */
@@ -171,8 +169,7 @@ class BaseRequest
     }
 
     /**
-     * Get method.
-     *
+     * 获取请求方法
      * @return string
      */
     public function method()
@@ -184,8 +181,7 @@ class BaseRequest
     }
 
     /**
-     * Get http protocol version.
-     *
+     * 获取协议版本号
      * @return string
      */
     public function protocolVersion()
@@ -197,8 +193,7 @@ class BaseRequest
     }
 
     /**
-     * Get host.
-     *
+     * 获取host
      * @param bool $without_port
      * @return string
      */
@@ -212,8 +207,7 @@ class BaseRequest
     }
 
     /**
-     * Get uri.
-     *
+     * 获取uri
      * @return mixed
      */
     public function uri()
@@ -225,8 +219,7 @@ class BaseRequest
     }
 
     /**
-     * Get path.
-     *
+     * 获取请求path
      * @return mixed
      */
     public function path()
@@ -238,8 +231,7 @@ class BaseRequest
     }
 
     /**
-     * Get query string.
-     *
+     * 获取query参数
      * @return mixed
      */
     public function queryString()
@@ -251,8 +243,7 @@ class BaseRequest
     }
 
     /**
-     * Get session.
-     *
+     * 获取所有的session
      * @return
      */
     public function session()
@@ -268,8 +259,7 @@ class BaseRequest
     }
 
     /**
-     * Get/Set session id.
-     *
+     * 获取或者设置session
      * @param $session_id
      * @return string
      */
@@ -302,8 +292,7 @@ class BaseRequest
     }
 
     /**
-     * Get http raw head.
-     *
+     * header 头部原始数据
      * @return string
      */
     public function rawHead()
@@ -315,8 +304,7 @@ class BaseRequest
     }
 
     /**
-     * Get http raw body.
-     *
+     * 获取请求的body部分原始数据
      * @return string
      */
     public function rawBody()
@@ -325,8 +313,7 @@ class BaseRequest
     }
 
     /**
-     * Get raw buffer.
-     *
+     * 获取整个请求的原始数据
      * @return string
      */
     public function rawBuffer()
@@ -335,8 +322,7 @@ class BaseRequest
     }
 
     /**
-     * Enable or disable cache.
-     *
+     * 开启缓存
      * @param mixed $value
      */
     public static function enableCache($value)
@@ -345,8 +331,7 @@ class BaseRequest
     }
 
     /**
-     * Parse first line of http header buffer.
-     *
+     * 解析header第一行，用于获取请求方法和路由
      * @return void
      */
     protected function parseHeadFirstLine()
@@ -358,8 +343,7 @@ class BaseRequest
     }
 
     /**
-     * Parse protocol version.
-     *
+     * 解析协议版本
      * @return void
      */
     protected function parseProtocolVersion()
@@ -370,8 +354,7 @@ class BaseRequest
     }
 
     /**
-     * Parse headers.
-     *
+     * 解析header
      * @return void
      */
     protected function parseHeaders()
@@ -414,8 +397,7 @@ class BaseRequest
     }
 
     /**
-     * Parse head.
-     *
+     * 解析get参数
      * @return void
      */
     protected function parseGet()
@@ -441,8 +423,7 @@ class BaseRequest
     }
 
     /**
-     * Parse post.
-     *
+     * 解析post参数
      * @return void
      */
     protected function parsePost()
@@ -478,8 +459,7 @@ class BaseRequest
     }
 
     /**
-     * Parse upload files.
-     *
+     * 解析上传的文件
      * @param string $http_post_boundary
      * @return void
      */
@@ -509,8 +489,9 @@ class BaseRequest
     }
 
     /**
-     * @param $boundary
-     * @param $section_start_offset
+     * 解析上传的文件
+     * @param string $boundary 分割线
+     * @param int $section_start_offset 偏移量
      * @return int
      */
     protected function parseUploadFile($boundary, $section_start_offset, &$post_encode_string, &$files_encode_str, &$files)
@@ -594,8 +575,7 @@ class BaseRequest
     }
 
     /**
-     * Create session id.
-     *
+     * 创建一个sessionID
      * @return string
      */
     protected static function createSessionId()
@@ -604,8 +584,7 @@ class BaseRequest
     }
 
     /**
-     * Setter.
-     *
+     * 设置参数
      * @param string $name
      * @param mixed $value
      * @return void
@@ -616,8 +595,7 @@ class BaseRequest
     }
 
     /**
-     * Getter.
-     *
+     * 获取参数
      * @param string $name
      * @return mixed|null
      */
@@ -627,8 +605,7 @@ class BaseRequest
     }
 
     /**
-     * Isset.
-     *
+     * 是否有某个参数
      * @param string $name
      * @return bool
      */
@@ -638,8 +615,7 @@ class BaseRequest
     }
 
     /**
-     * Unset.
-     *
+     * 删除某个参数
      * @param string $name
      * @return void
      */
@@ -658,7 +634,7 @@ class BaseRequest
 
     /**
      * __wakeup.
-     *
+     * 反序列化的时候
      * @return void
      */
     public function __wakeup()

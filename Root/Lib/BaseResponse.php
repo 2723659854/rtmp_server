@@ -2,18 +2,20 @@
 
 namespace Root\Lib;
 
-
+/**
+ * @purpose 响应基类
+ */
 class BaseResponse
 {
     /**
-     * Header data.
+     * 头部.
      *
      * @var array
      */
     protected $_header = null;
 
     /**
-     * Http status.
+     * Http 状态
      *
      * @var int
      */
@@ -27,21 +29,21 @@ class BaseResponse
     protected $_reason = null;
 
     /**
-     * Http version.
+     * Http 版本
      *
      * @var string
      */
     protected $_version = '1.1';
 
     /**
-     * Http body.
+     * 需要发送的body内容
      *
      * @var string
      */
     protected $_body = null;
 
     /**
-     * Send file info
+     * 需要发送的文件
      *
      * @var array
      */
@@ -54,7 +56,7 @@ class BaseResponse
     protected static $_mimeTypeMap = null;
 
     /**
-     * Phrases.
+     * 状态码
      *
      * @var array
      */
@@ -120,7 +122,7 @@ class BaseResponse
     );
 
     /**
-     * Init.
+     *  初始化
      *
      * @return void
      */
@@ -146,7 +148,7 @@ class BaseResponse
     }
 
     /**
-     * Set header.
+     * 设置头部
      *
      * @param string $name
      * @param string $value
@@ -158,7 +160,7 @@ class BaseResponse
     }
 
     /**
-     * Set header.
+     * 设置头部
      *
      * @param string $name
      * @param string $value
@@ -169,7 +171,7 @@ class BaseResponse
     }
 
     /**
-     * Set headers.
+     * 批量设置头部
      *
      * @param array $headers
      * @return $this
@@ -180,7 +182,7 @@ class BaseResponse
     }
 
     /**
-     * Remove header.
+     * 移除头部
      *
      * @param string $name
      * @return $this
@@ -191,7 +193,7 @@ class BaseResponse
     }
 
     /**
-     * Get header.
+     * 获取头部
      *
      * @param string $name
      * @return null|array|string
@@ -204,7 +206,7 @@ class BaseResponse
     }
 
     /**
-     * Get headers.
+     * 获取所有头部
      *
      * @return array
      */
@@ -213,7 +215,7 @@ class BaseResponse
     }
 
     /**
-     * Set status.
+     * 设置状态码
      *
      * @param int $code
      * @param string|null $reason_phrase
@@ -226,7 +228,7 @@ class BaseResponse
     }
 
     /**
-     * Get status code.
+     * 获取状态码
      *
      * @return int
      */
@@ -235,7 +237,7 @@ class BaseResponse
     }
 
     /**
-     * Get reason phrase.
+     * 获取原有解析
      *
      * @return string
      */
@@ -244,7 +246,7 @@ class BaseResponse
     }
 
     /**
-     * Set protocol version.
+     * 设置版本号
      *
      * @param int $version
      * @return $this
@@ -255,7 +257,7 @@ class BaseResponse
     }
 
     /**
-     * Set http body.
+     * 设置body数据
      *
      * @param string $body
      * @return $this
@@ -266,7 +268,7 @@ class BaseResponse
     }
 
     /**
-     * Get http raw body.
+     * 获取body部分原始数据
      *
      * @return string
      */
@@ -275,7 +277,7 @@ class BaseResponse
     }
 
     /**
-     * Send file.
+     * 发送文件
      *
      * @param string $file
      * @param int $offset
@@ -291,7 +293,7 @@ class BaseResponse
     }
 
     /**
-     * Set cookie.
+     * 设置cookie
      *
      * @param $name
      * @param string $value
@@ -316,7 +318,7 @@ class BaseResponse
     }
 
     /**
-     * Create header for file.
+     * 设置头部传输文件
      *
      * @param array $file_info
      * @return string
@@ -377,7 +379,7 @@ class BaseResponse
 
     /**
      * __toString.
-     *
+     * 将整个对象 转 字符串
      * @return string
      */
     public function __toString()
@@ -428,7 +430,7 @@ class BaseResponse
 
     /**
      * Init mime map.
-     *
+     * mime类型
      * @return void
      */
     public static function initMimeTypeMap()

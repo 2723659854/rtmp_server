@@ -4,6 +4,10 @@ namespace Root\Lib;
 
 use SplFileInfo;
 
+/**
+ * @purpose 文件处理类
+ * @comment 这个用不上，但是为了保证协议的完整性，保留下来了
+ */
 class File extends SplFileInfo
 {
 

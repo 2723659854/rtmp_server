@@ -2,53 +2,51 @@
 
 namespace Root\Lib;
 
+/**
+ * @purpose session管理
+ */
 class Session
 {
     /**
      * Session andler class which implements SessionHandlerInterface.
-     *
+     * session处理类
      * @var string
      */
-    protected static $_handlerClass = 'Root\FileSessionHandler';
+    protected static $_handlerClass = 'Root\Lib\FileSessionHandler';
 
     /**
      * Parameters of __constructor for session handler class.
-     *
+     * 配置
      * @var null
      */
     protected static $_handlerConfig = null;
 
     /**
-     * Session name.
-     *
+     * 名称
      * @var string
      */
     public static $name = 'PHPSID';
 
     /**
-     * Auto update timestamp.
-     *
+     * 是否自动更新session有效时间
      * @var bool
      */
     public static $autoUpdateTimestamp = false;
 
     /**
-     * Session lifetime.
-     *
+     * 生命周期
      * @var int
      */
     public static $lifetime = 1440;
 
     /**
-     * Cookie lifetime.
-     *
+     * cookie 生命周期
      * @var int
      */
     public static $cookieLifetime = 1440;
 
     /**
-     * Session cookie path.
-     *
+     * cookie存储路径
      * @var string
      */
     public static $cookiePath = '/';
@@ -62,7 +60,7 @@ class Session
 
     /**
      * HTTPS only cookies.
-     *
+     * https 仅用
      * @var bool
      */
     public static $secure = false;
@@ -131,18 +129,19 @@ class Session
     public function __construct($session_id)
     {
         static::checkSessionId($session_id);
+        /** 设置操作类 */
         if (static::$_handler === null) {
             static::initHandler();
         }
         $this->_sessionId = $session_id;
+        /** 读取数据，并反序列化数据 */
         if ($data = static::$_handler->read($session_id)) {
             $this->_data = \unserialize($data);
         }
     }
 
     /**
-     * Get session id.
-     *
+     * 获取sessionId
      * @return string
      */
     public function getId()
@@ -151,8 +150,7 @@ class Session
     }
 
     /**
-     * Get session.
-     *
+     * 获取某一个值
      * @param string $name
      * @param mixed|null $default
      * @return mixed|null
@@ -163,8 +161,7 @@ class Session
     }
 
     /**
-     * Store data in the session.
-     *
+     * 设置某一个值
      * @param string $name
      * @param mixed $value
      */
@@ -175,8 +172,7 @@ class Session
     }
 
     /**
-     * Delete an item from the session.
-     *
+     * 删除某一个值
      * @param string $name
      */
     public function delete($name)
@@ -186,8 +182,7 @@ class Session
     }
 
     /**
-     * Retrieve and delete an item from the session.
-     *
+     * 获取并删除某一个值
      * @param string $name
      * @param mixed|null $default
      * @return mixed|null
@@ -200,8 +195,7 @@ class Session
     }
 
     /**
-     * Store data in the session.
-     *
+     * 设置某一个值
      * @param string|array $key
      * @param mixed|null $value
      */
@@ -219,8 +213,7 @@ class Session
     }
 
     /**
-     * Remove a piece of data from the session.
-     *
+     * 清除某一个值
      * @param string $name
      */
     public function forget($name)
@@ -238,8 +231,7 @@ class Session
     }
 
     /**
-     * Retrieve all the data in the session.
-     *
+     * 获取所有的数据
      * @return array
      */
     public function all()
@@ -248,8 +240,7 @@ class Session
     }
 
     /**
-     * Remove all data from the session.
-     *
+     * 删除所有的数据
      * @return void
      */
     public function flush()
@@ -259,8 +250,7 @@ class Session
     }
 
     /**
-     * Determining If An Item Exists In The Session.
-     *
+     * 是否有某一个session
      * @param string $name
      * @return bool
      */
@@ -270,8 +260,7 @@ class Session
     }
 
     /**
-     * To determine if an item is present in the session, even if its value is null.
-     *
+     * 判断是否存在某一个值，及时为null
      * @param string $name
      * @return bool
      */
@@ -281,8 +270,7 @@ class Session
     }
 
     /**
-     * Save session to store.
-     *
+     * 保存session
      * @return void
      */
     public function save()
@@ -300,8 +288,7 @@ class Session
     }
 
     /**
-     * Refresh session expire time.
-     *
+     * 刷新有效期
      * @return bool
      */
     public function refresh()
@@ -310,8 +297,7 @@ class Session
     }
 
     /**
-     * Init.
-     *
+     * 初始化
      * @return void
      */
     public static function init()
@@ -333,8 +319,7 @@ class Session
     }
 
     /**
-     * Set session handler class.
-     *
+     * 设置操作类
      * @param mixed|null $class_name
      * @param mixed|null $config
      * @return string
@@ -351,8 +336,7 @@ class Session
     }
 
     /**
-     * Get cookie params.
-     *
+     * 获取cookie参数
      * @return array
      */
     public static function getCookieParams()
@@ -368,8 +352,7 @@ class Session
     }
 
     /**
-     * Init handler.
-     *
+     * 初始化操作类
      * @return void
      */
     protected static function initHandler()
@@ -382,8 +365,7 @@ class Session
     }
 
     /**
-     * GC sessions.
-     *
+     * 刷新数据
      * @return void
      */
     public function gc()
@@ -393,7 +375,7 @@ class Session
 
     /**
      * __wakeup.
-     *
+     * 反序列化的时候
      * @return void
      */
     public function __wakeup()
@@ -403,7 +385,7 @@ class Session
 
     /**
      * __destruct.
-     *
+     * 对象被摧毁的时候保存数据
      * @return void
      */
     public function __destruct()
@@ -418,8 +400,7 @@ class Session
     }
 
     /**
-     * Check session id.
-     *
+     * 检查sessionID是否合法
      * @param string $session_id
      */
     protected static function checkSessionId($session_id)

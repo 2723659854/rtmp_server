@@ -6,28 +6,28 @@ use Root\Lib\File;
 use function pathinfo;
 
 /**
- * Class UploadFile
- * @package Webman\Http
+ * @purpose 文件上传类
+ * @comment 本项目实际上用不到文件操作，但是为了保证协议完整性而保留
  */
 class UploadFile extends File
 {
     /**
-     * @var string
+     * @var string 名称
      */
     protected $uploadName = null;
 
     /**
-     * @var string
+     * @var string 类型
      */
     protected $uploadMimeType = null;
 
     /**
-     * @var int
+     * @var int 错误码
      */
     protected $uploadErrorCode = null;
 
     /**
-     * UploadFile constructor.
+     * 初始化
      *
      * @param string $fileName
      * @param string $uploadName
@@ -43,7 +43,7 @@ class UploadFile extends File
     }
 
     /**
-     * GetUploadName
+     * 获取上传文件名称
      * @return string
      */
     public function getUploadName(): ?string
@@ -52,7 +52,7 @@ class UploadFile extends File
     }
 
     /**
-     * GetUploadMimeType
+     * 获取文件类型
      * @return string
      */
     public function getUploadMimeType(): ?string
@@ -61,7 +61,7 @@ class UploadFile extends File
     }
 
     /**
-     * GetUploadExtension
+     * 获取扩展
      * @return string
      */
     public function getUploadExtension(): string
@@ -70,7 +70,7 @@ class UploadFile extends File
     }
 
     /**
-     * GetUploadErrorCode
+     * 获取错误码
      * @return int
      */
     public function getUploadErrorCode(): ?int
@@ -79,8 +79,9 @@ class UploadFile extends File
     }
 
     /**
-     * IsValid
+     * 是否正确
      * @return bool
+     * @comment 是否上传成功
      */
     public function isValid(): bool
     {
@@ -88,7 +89,7 @@ class UploadFile extends File
     }
 
     /**
-     * GetUploadMineType
+     * 获取mineType
      * @return string
      * @deprecated
      */
