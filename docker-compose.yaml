@@ -10,7 +10,7 @@ services:
     restart: always
     # 容器使用的镜像名称 可以是本地的镜像名称，也可以线上的镜像名称 ，也可以直接填镜像的ID,如果重新编辑了Dockerfile文件，
     # 那么就要删除原来的镜像或者修改下面的image的名字,否则还是用的原来的镜像，巨坑
-    image: five
+    image: my_php_8
     # 设置网络
 #    networks:
 #      bridge:

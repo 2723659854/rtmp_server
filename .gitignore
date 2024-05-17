@@ -4,4 +4,4 @@
 .htaccess
 nginx.htaccess
 *.mp4
-
+/hls/*

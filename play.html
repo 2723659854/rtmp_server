@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <title>HLS Video 播放</title>
+    <meta charset="UTF-8">
+    <!--<script src="https://cdn.jsdelivr.net/npm/hls.js@latest/dist/hls.min.js"></script>-->
+    <script src="./hls.min.js"></script>
+</head>
+<body>
+<video id="video" muted controls></video>
+
+<script>
+    if(Hls.isSupported()) {
+        var video = document.getElementById('video');
+        var hls = new Hls();
+        /** 请更换为自己的播放地址 */
+        hls.loadSource('http://my.play.com/hls/put.m3u8');
+        hls.attachMedia(video);
+        hls.on(Hls.Events.MANIFEST_PARSED, function() {
+            video.play();
+        });
+    } else if (video.canPlayType('application/vnd.apple.mpegURL')) {
+        /** 请更换为自己的播放地址 */
+        video.src = 'http://my.play.com/hls/put.m3u8';
+        video.addEventListener('loadedmetadata', function() {
+            video.play();
+        });
+    }
+</script>
+</body>
+</html>

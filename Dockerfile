@@ -69,6 +69,9 @@ RUN git clone https://github.com/php-memcached-dev/php-memcached.git /usr/src/ph
 # 安装memcached扩展
 RUN docker-php-ext-install /usr/src/php/ext/memcached
 
+# 安装ffmpeg
+RUN apk add ffmpeg
+
 # 将当前的文件复制到指定目录，如果使用了任务编排，这个copy代码是无效的
 # COPY . /usr/src/myapp
 # 指定工作目录
