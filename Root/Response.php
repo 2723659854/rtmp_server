@@ -48,11 +48,7 @@ class Response extends BaseResponse
      */
     protected function notModifiedSince(string $file): bool
     {
-        $ifModifiedSince = G(Request::class)->header('if-modified-since');
-        if ($ifModifiedSince === null || !is_file($file) || !($mtime = filemtime($file))) {
-            return false;
-        }
-        return $ifModifiedSince === gmdate('D, d M Y H:i:s', $mtime) . ' GMT';
+        return false;
     }
 
     /**
