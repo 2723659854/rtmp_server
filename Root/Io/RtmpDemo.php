@@ -246,6 +246,7 @@ class RtmpDemo
     /**
      * 创建web服务
      * @return false|resource
+     * @note 本项目只提供hls相关文件下载，不提供其他的web服务
      */
     public function createWebServer()
     {
