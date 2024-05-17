@@ -1,3 +1,9 @@
 
 hls协议详解
 https://blog.csdn.net/qq_41839588/article/details/134093390
+
+安装ffmpeg软件
+apk add ffmpeg
+
+ffmpeg -i rtmp://yourserver/live/streamName -c copy -f hls -hls_list_size 0 -hls_time 60 /path/to/hls/output/streamName.m3u8
+ffmpeg -i rtmp://127.0.0.1/a/b -c copy -f hls -hls_list_size 0 -hls_time 60 ./hls/b.m3u8
