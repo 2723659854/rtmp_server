@@ -320,8 +320,7 @@ class TcpConnection extends ConnectionInterface
                 /** 向客户端发送数据 */
                 $len = @\fwrite($this->_socket, $send_buffer);
             } catch (\Exception $e) {
-
-                var_dump($e->getMessage());
+                logger()->error($e->getMessage());
             }
             /** 发送成功，更新已发送长度 */
 
@@ -343,8 +342,7 @@ class TcpConnection extends ConnectionInterface
                         try {
                             \call_user_func($this->onError, $this, 2, 'client closed');
                         } catch (\Exception $e) {
-                            
-                            var_dump($e->getMessage());
+                            logger()->error($e->getMessage());
                         }
                     }
                     /** 销毁链接 */
@@ -582,7 +580,7 @@ class TcpConnection extends ConnectionInterface
                     }
                     else {
                         /** 错误的包 */
-                        var_dump('Error package. package_length=' . \var_export($this->_currentPackageLength, true));
+                        logger()->error('Error package. package_length=' . \var_export($this->_currentPackageLength, true));
                         $this->destroy();
                         return;
                     }
@@ -608,7 +606,7 @@ class TcpConnection extends ConnectionInterface
                     /** 先对数据解码 调用这个协议定义的回调事件处理逻辑 实际上在建立链接的时候就定义了数据处理回调函数 flv数据将会调用HttpWMServer的onHttpRequest函数处理数据 */
                     \call_user_func($this->onMessage, $this, $parser::decode($one_request_buffer, $this));
                 } catch (\Exception $e) {
-                    var_dump($e->getMessage());
+                    logger()->error($e->getMessage());
                 }
             }
             return;
@@ -632,7 +630,7 @@ class TcpConnection extends ConnectionInterface
         try {
             \call_user_func($this->onMessage, $this, $this->_recvBuffer);
         } catch (\Exception $e) {
-            var_dump($e->getMessage());
+            logger()->error($e->getMessage());
         }
         /** 清空暂存区  */
         $this->_recvBuffer = '';
@@ -669,8 +667,8 @@ class TcpConnection extends ConnectionInterface
                 try {
                     \call_user_func($this->onBufferDrain, $this);
                 } catch (\Exception $e) {
-                    
-                    var_dump($e->getMessage());
+
+                    logger()->error($e->getMessage());
                 }
             }
             /** 如果链接已经关闭，则销毁链接 */
@@ -796,8 +794,8 @@ class TcpConnection extends ConnectionInterface
                 try {
                     \call_user_func($this->onBufferFull, $this);
                 } catch (\Exception $e) {
-                    
-                    var_dump($e->getMessage());
+
+                    logger()->error($e->getMessage());
                 }
             }
         }
@@ -816,7 +814,7 @@ class TcpConnection extends ConnectionInterface
                 try {
                     \call_user_func($this->onError, $this, 2, 'send buffer full and drop package');
                 } catch (\Exception $e) {
-                    var_dump($e->getMessage());
+                    logger()->error($e->getMessage());
                 }
             }
             return true;
@@ -852,7 +850,7 @@ class TcpConnection extends ConnectionInterface
         try {
             @\fclose($this->_socket);
         } catch (\Exception $e) {
-            var_dump($e->getMessage());
+            logger()->error($e->getMessage());
         }
         /** 修改链接状态为已关闭 */
         $this->_status = self::STATUS_CLOSED;
@@ -862,7 +860,7 @@ class TcpConnection extends ConnectionInterface
                 \call_user_func($this->onClose, $this);
             } catch (\Exception $e) {
 
-                var_dump($e->getMessage());
+                logger()->error($e->getMessage());
             }
         }
         /** 触发协议的关闭事件 */
@@ -870,7 +868,8 @@ class TcpConnection extends ConnectionInterface
             try {
                 \call_user_func(array($this->protocol, 'onClose'), $this);
             } catch (\Exception $e) {
-                var_dump($e->getMessage());
+                logger()->error($e->getMessage());
+
             }
         }
         /** 清空暂存区 和相关状态 */

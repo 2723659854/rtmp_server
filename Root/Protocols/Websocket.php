@@ -99,7 +99,7 @@ class Websocket implements ProtocolInterface
                             $close_cb($connection);
                         } catch (\Throwable $e) {
                             
-                            var_dump($e->getMessage());
+                            logger()->error($e->getMessage());
                         }
                     } // Close connection.
                     else {
@@ -160,7 +160,7 @@ class Websocket implements ProtocolInterface
                                 $ping_cb($connection, $ping_data);
                             } catch (\Throwable $e) {
                                 
-                                var_dump($e->getMessage());
+                                logger()->error($e->getMessage());
                             }
                         } else {
                             $connection->send($ping_data);
@@ -184,7 +184,7 @@ class Websocket implements ProtocolInterface
                                 $pong_cb($connection, $pong_data);
                             } catch (\Throwable $e) {
                                 
-                                var_dump($e->getMessage());
+                                logger()->error($e->getMessage());
                             }
                         }
                         $connection->websocketType = $tmp_connection_type;
@@ -265,7 +265,7 @@ class Websocket implements ProtocolInterface
                     try {
                         ($connection->onError)($connection, ConnectionInterface::SEND_FAIL, 'send buffer full and drop package');
                     } catch (\Throwable $e) {
-                        //var_dump($e->getMessage());
+                        //logger()->error($e->getMessage());
                     }
                 }
                 return '';
@@ -278,7 +278,7 @@ class Websocket implements ProtocolInterface
                         ($connection->onBufferFull)($connection);
                     } catch (\Throwable $e) {
                         
-                        var_dump($e->getMessage());
+                        logger()->error($e->getMessage());
                     }
                 }
             }
@@ -439,7 +439,7 @@ class Websocket implements ProtocolInterface
                     \call_user_func($on_websocket_connect, $connection, $buffer);
                 } catch (\Exception $e) {
                     
-                    var_dump($e->getMessage());
+                    logger()->error($e->getMessage());
                 }
 
                 $_GET = $_SERVER = $_SESSION = $_COOKIE = array();

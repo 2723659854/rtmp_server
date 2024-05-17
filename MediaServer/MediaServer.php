@@ -11,7 +11,7 @@ use MediaServer\PushServer\VerifyAuthStreamInterface;
 
 
 /**
- * @purpose 这个媒体中心服务，是怎么关联上的额
+ * @purpose 媒体中心服务
  */
 class MediaServer
 {

@@ -279,7 +279,7 @@ class RtmpDemo
             try {
                 stream_select($read, $write, $except, 60);
             } catch (\Exception $exception) {
-                var_dump($exception->getMessage());
+                logger()->error($exception->getMessage());
             }
 
             /** 处理可读的链接 */
@@ -311,7 +311,7 @@ class RtmpDemo
                                     new \MediaServer\Utils\WMBufferStream($connection)
                                 );
                             } catch (\Exception|\RuntimeException $exception) {
-                                var_dump($exception->getMessage());
+                                logger()->error($exception->getMessage());
                             }
                         }
                         /** 将这个客户端连接保存，目测这里如果不保存，应该是无法发送和接收消息的，就是要把所有的连接都保存在内存中 */
