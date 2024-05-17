@@ -41,8 +41,7 @@ class Websocket implements ProtocolInterface
     const BINARY_TYPE_ARRAYBUFFER_DEFLATE = "\xc2";
 
     /**
-     * Check the integrity of the package.
-     *
+     * 检查包的完整性
      * @param string $buffer
      * @param ConnectionInterface $connection
      * @return int
@@ -222,8 +221,7 @@ class Websocket implements ProtocolInterface
     }
 
     /**
-     * Websocket encode.
-     *
+     * 数据编码
      * @param string $buffer
      * @param ConnectionInterface $connection
      * @return string
@@ -267,8 +265,7 @@ class Websocket implements ProtocolInterface
                     try {
                         ($connection->onError)($connection, ConnectionInterface::SEND_FAIL, 'send buffer full and drop package');
                     } catch (\Throwable $e) {
-                        
-                        var_dump($e->getMessage());
+                        //var_dump($e->getMessage());
                     }
                 }
                 return '';
@@ -293,8 +290,7 @@ class Websocket implements ProtocolInterface
     }
 
     /**
-     * Websocket decode.
-     *
+     * 数据解码
      * @param string $buffer
      * @param ConnectionInterface $connection
      * @return string
@@ -341,8 +337,7 @@ class Websocket implements ProtocolInterface
     }
 
     /**
-     * Inflate.
-     *
+     * 二进制数据解压
      * @param $connection
      * @param $buffer
      * @param $is_fin_frame
@@ -368,8 +363,7 @@ class Websocket implements ProtocolInterface
     }
 
     /**
-     * Deflate.
-     *
+     * 二进制数据压缩
      * @param $connection
      * @param $buffer
      * @return false|string
@@ -391,8 +385,7 @@ class Websocket implements ProtocolInterface
     }
 
     /**
-     * Websocket handshake.
-     *
+     * Websocket 握手
      * @param string $buffer
      * @param TcpConnection $connection
      * @return int
@@ -408,7 +401,7 @@ class Websocket implements ProtocolInterface
             }
             $header_length = $header_end_pos + 4;
 
-            // Get Sec-WebSocket-Key.
+            /** 获取Sec-WebSocket-Key */
             $Sec_WebSocket_Key = '';
             if (\preg_match("/Sec-WebSocket-Key: *(.*?)\r\n/i", $buffer, $match)) {
                 $Sec_WebSocket_Key = $match[1];
@@ -418,15 +411,17 @@ class Websocket implements ProtocolInterface
                     true);
                 return 0;
             }
+            /** 计算秘钥 */
             // Calculation websocket key.
             $new_key = \base64_encode(\sha1($Sec_WebSocket_Key . "258EAFA5-E914-47DA-95CA-C5AB0DC85B11", true));
             // Handshake response data.
+            /** 握手响应内容 */
             $handshake_message = "HTTP/1.1 101 Switching Protocols\r\n"
                 . "Upgrade: websocket\r\n"
                 . "Sec-WebSocket-Version: 13\r\n"
                 . "Connection: Upgrade\r\n"
                 . "Sec-WebSocket-Accept: " . $new_key . "\r\n";
-
+            /** 初始化链接 */
             // Websocket data buffer.
             $connection->context->websocketDataBuffer = '';
             // Current websocket frame length.
@@ -435,7 +430,7 @@ class Websocket implements ProtocolInterface
             $connection->context->websocketCurrentFrameBuffer = '';
             // Consume handshake data.
             $connection->consumeRecvBuffer($header_length);
-
+            /** 获取链接事件  */
             // Try to emit onWebSocketConnect callback.
             $on_websocket_connect = $connection->onWebSocketConnect ?? $connection->worker->onWebSocketConnect ?? false;
             if ($on_websocket_connect) {
@@ -456,7 +451,7 @@ class Websocket implements ProtocolInterface
             }
 
             $has_server_header = false;
-
+            /** 组装header传输内容 */
             if (isset($connection->headers)) {
                 if (\is_array($connection->headers)) {
                     foreach ($connection->headers as $header) {
@@ -477,10 +472,13 @@ class Websocket implements ProtocolInterface
             }
             $handshake_message .= "\r\n";
             // Send handshake response.
+            /** 将握手数据返回给客户端 */
             $connection->send($handshake_message, true);
             // Mark handshake complete..
+            /** 更新握手状态 */
             $connection->context->websocketHandshake = true;
 
+            /** 发送其他数据 */
             // There are data waiting to be sent.
             if (!empty($connection->context->tmpWebsocketData)) {
                 $connection->send($connection->context->tmpWebsocketData, true);
@@ -498,8 +496,7 @@ class Websocket implements ProtocolInterface
     }
 
     /**
-     * Parse http header.
-     *
+     * 解析http的头部header信息
      * @param string $buffer
      * @return void
      */
@@ -509,6 +506,7 @@ class Websocket implements ProtocolInterface
         list($http_header, ) = \explode("\r\n\r\n", $buffer, 2);
         $header_data = \explode("\r\n", $http_header);
 
+        /** cli模式 清空$_SERVER */
         if ($_SERVER) {
             $_SERVER = array();
         }

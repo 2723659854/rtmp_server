@@ -12,7 +12,8 @@
         "php": ">=8.1",
         "react/promise": "^2.9",
         "evenement/evenement": "^3.0",
-        "apix/log": "^1.2"
+        "apix/log": "^1.2",
+        "ext-zlib": "*"
     },
     "autoload": {
         "psr-0": {
