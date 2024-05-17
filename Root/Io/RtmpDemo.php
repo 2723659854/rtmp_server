@@ -2,6 +2,9 @@
 
 namespace Root\Io;
 
+use Root\Protocols\Http;
+use Root\Request;
+use Root\Response;
 use Root\rtmp\TcpConnection;
 
 /**
@@ -26,6 +29,9 @@ class RtmpDemo
 
     /** @var string $flvPort flv监听端口 可修改 */
     public $flvPort = '8501';
+
+    /** @var string $webPort web端口 */
+    public $webPort = '80';
 
     /** @var string $protocol 通信协议 */
     private $protocol = 'tcp';
@@ -56,6 +62,9 @@ class RtmpDemo
 
     /** flv服務端 */
     private static $flvServerSocket = null;
+
+    /** web服务器 */
+    private static $webServerSocket = null;
 
     /**
      * PHP 默认支持的协议
@@ -235,6 +244,54 @@ class RtmpDemo
     }
 
     /**
+     * 创建web服务
+     * @return false|resource
+     */
+    public function createWebServer()
+    {
+        /** @var string $listeningAddress 拼接监听地址 */
+        $listeningAddress = 'tcp://' . $this->host . ':' . $this->webPort;
+        echo "开始监听{$listeningAddress}\r\n";
+        /** 不验证https证书 */
+        $contextOptions['ssl'] = ['verify_peer' => false, 'verify_peer_name' => false];
+        /** 配置socket流参数 */
+        $context = stream_context_create($contextOptions);
+        /** 设置端口复用 解决惊群效应  */
+        stream_context_set_option($context, 'socket', 'so_reuseport', 1);
+        /** 设置ip复用 */
+        stream_context_set_option($context, 'socket', 'so_reuseaddr', 1);
+        /** 设置服务端：监听地址+端口 */
+        $socket = stream_socket_server($listeningAddress, $errno, $errstr, STREAM_SERVER_BIND | STREAM_SERVER_LISTEN, $context);
+        /** 设置非阻塞，语法是关闭阻塞 */
+        stream_set_blocking($socket, 0);
+        /** 将服务端保存所有socket列表  */
+        self::$allSocket[(int)$socket] = $socket;
+        /** 单独保存服务端 */
+        $this->serverSocket[(int)$socket] = $socket;
+        /** 保存web服务器 */
+        self::$webServerSocket = $socket;
+        /** 返回服务器实例 */
+        return $socket;
+
+    }
+
+    /**
+     * 检查是否安装ffmpeg
+     * @return bool
+     */
+    public function hasFfmpeg()
+    {
+        // 执行ffmpeg命令并捕获输出
+        $output = shell_exec('ffmpeg -version 2>&1');
+        // 检查输出中是否包含FFmpeg的版本信息
+        if (strpos($output, 'ffmpeg version') !== false) {
+            return true;
+        } else {
+            return false;
+        }
+    }
+
+    /**
      * 启动服务
      */
     public function start()
@@ -243,6 +300,8 @@ class RtmpDemo
         $this->createRtmpServer();
         /** 启动flv服务 */
         $this->startFlv();
+        /** 创建web服务器 */
+        $this->createWebServer();
         /** 开始接收客户端请求 */
         $this->accept();
     }
@@ -295,16 +354,30 @@ class RtmpDemo
                             try {
                                 /** 使用tcp解码器 */
                                 $connection = new TcpConnection($clientSocket, $remote_address);
+                                /** 通信协议 */
+                                $connection->transport = $this->transport;
                                 /** 如果是flv的链接 就设置为http的协议 */
                                 if (self::$flvServerSocket && $fd == self::$flvServerSocket) {
                                     $connection->protocol = \MediaServer\Http\ExtHttpProtocol::class;
+                                    /** 支持http的flv播放 这个onMessage事件在创建flv服务器的时候被定义过 */
+                                    $connection->onMessage = $this->onMessage;
+                                    /** 支持ws的flv播放 这个也是在创建flv服务器的时候被定义过 */
+                                    $connection->onWebSocketConnect = $this->onWebSocketConnect;
                                 }
-                                /** 通信协议 */
-                                $connection->transport = $this->transport;
-                                /** 支持http的flv播放 这个onMessage事件在创建flv服务器的时候被定义过 */
-                                $connection->onMessage = $this->onMessage;
-                                /** 支持ws的flv播放 这个也是在创建flv服务器的时候被定义过 */
-                                $connection->onWebSocketConnect = $this->onWebSocketConnect;
+                                /** web服务器使用http协议 */
+                                if (self::$webServerSocket && $fd == self::$webServerSocket){
+                                    $connection->protocol = Http::class;
+                                    $connection->onMessage = function ($connection,Request  $request){
+                                        $path = $request->path();
+                                        $file = dirname(dirname(__DIR__)).'/hls/'.$path;
+                                        if (is_file($file)){
+                                            $response = new Response();
+                                            $response->file($file);
+                                            $connection->send($response);
+                                        }
+                                        $connection->send(new Response(200,[],'zhangsan'));
+                                    };
+                                }
                                 /** 处理rtmp链接的数据 */
                                 new \MediaServer\Rtmp\RtmpStream(
                                 /** 使用自定义协议处理传递过来的数据 */

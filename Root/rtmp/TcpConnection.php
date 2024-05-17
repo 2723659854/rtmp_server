@@ -558,23 +558,30 @@ class TcpConnection extends ConnectionInterface
             $parser = $this->protocol;
             /** 如果有数据 */
             while ($this->_recvBuffer !== '' && !$this->_isPaused) {
+
                 if ($this->_currentPackageLength) {
+
                     /** 如果当前包的长度大于暂存区数据长度，说明还没有接收完数据，请继续接收数据 */
                     if ($this->_currentPackageLength > \strlen($this->_recvBuffer)) {
+
                         break;
                     }
                 } else {
                     try {
                         /** 检查包的完整性 如果是rtmp协议，那么这里返回了0 */
                         $this->_currentPackageLength = $parser::input($this->_recvBuffer, $this);
-                    } catch (\Exception $e) {}
+                    } catch (\Exception $e) {
+
+                    }
                     /** 如果返回的是0 则需要读取更多的数据，就是客户端数据还没有发送完，还不知道包的长度是多少 */
                     if ($this->_currentPackageLength === 0) {/** rtmp协议，已经截获了数据 ，返回0 程序走到这里就，数据被WMBufferStream触发ondata事件来处理 */
+
                         break;
                         /** 包长度小于 系统设定最大包长度 */
                     } elseif ($this->_currentPackageLength > 0 && $this->_currentPackageLength <= $this->maxPackageSize) {
                         /** 还没有接收完数据 */
                         if ($this->_currentPackageLength > \strlen($this->_recvBuffer)) {
+
                             break;
                         }
                     }
@@ -585,6 +592,7 @@ class TcpConnection extends ConnectionInterface
                         return;
                     }
                 }
+
                 /** 更新请求数 */
                 ++self::$statistics['total_request'];
                 /** 当前读取的数据长度和客户端传输数据长度一致 清空暂存区 */
@@ -596,10 +604,12 @@ class TcpConnection extends ConnectionInterface
                     $one_request_buffer = \substr($this->_recvBuffer, 0, $this->_currentPackageLength);
                     $this->_recvBuffer = \substr($this->_recvBuffer, $this->_currentPackageLength);
                 }
+
                 /** 还原包的长度 */
                 $this->_currentPackageLength = 0;
                 /** 如果未定义消息处理回调函数 */
                 if (!$this->onMessage) {
+
                     continue;
                 }
                 try {
