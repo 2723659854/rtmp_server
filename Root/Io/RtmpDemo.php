@@ -290,19 +290,13 @@ class RtmpDemo
                     if (in_array($fd, $this->serverSocket)) {
                         /** 读取服务端接收到的 消息，这个消息的内容是客户端连接 ，stream_socket_accept方法负责接收客户端连接 */
                         $clientSocket = stream_socket_accept($fd, 0, $remote_address); //阻塞监听 设置超时0，并获取客户端地址
-                        /** 判断是否是flv链接 默认为否 */
-                        $isFlv = false;
-                        /** 把flv的客戶端單獨保存有用，后面解码数据的时候，需要手动切换协议 */
-                        if (self::$flvServerSocket && $fd == self::$flvServerSocket) {
-                            $isFlv = true;
-                        }
                         /** 如果这个客户端连接不为空 */
                         if (!empty($clientSocket)) {
                             try {
                                 /** 使用tcp解码器 */
                                 $connection = new TcpConnection($clientSocket, $remote_address);
                                 /** 如果是flv的链接 就设置为http的协议 */
-                                if ($isFlv == true){
+                                if (self::$flvServerSocket && $fd == self::$flvServerSocket) {
                                     $connection->protocol = \MediaServer\Http\ExtHttpProtocol::class;
                                 }
                                 /** 通信协议 */

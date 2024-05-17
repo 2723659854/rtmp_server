@@ -69,7 +69,7 @@
          *
          * @return ArrayObject
          */
-        function getIterator() {
+        #[ReturnTypeWillChange] function getIterator() {
 
             return $this->data;
 
@@ -81,7 +81,8 @@
          * @param mixed $offset
          * @return bool
          */
-        function offsetExists($offset) {
+        #[ReturnTypeWillChange] function offsetExists(mixed $offset): bool
+        {
 
             return isset($this->data[$offset]);
 
@@ -93,7 +94,8 @@
          * @param mixed $offset
          * @return mixed
          */
-        function offsetGet($offset) {
+        #[ReturnTypeWillChange] function offsetGet(mixed $offset): mixed
+        {
 
             return $this->data[$offset];
 
@@ -106,7 +108,8 @@
          * @param mixed $value
          * @return void
          */
-        function offsetSet($offset,$value) {
+        #[ReturnTypeWillChange] function offsetSet(mixed $offset, mixed $value): void
+        {
 
             if (!is_null($offset)) {
                 $this->data[$offset] = $value;
@@ -122,7 +125,8 @@
          * @param mixed $offset
          * @return void
          */
-        function offsetUnset($offset) {
+        #[ReturnTypeWillChange] function offsetUnset(mixed $offset): void
+        {
 
             unset($this->data[$offset]);
 
@@ -133,7 +137,8 @@
          *
          * @return int
          */
-        function count() {
+        #[ReturnTypeWillChange] function count(): int
+        {
 
             return count($this->data);
 

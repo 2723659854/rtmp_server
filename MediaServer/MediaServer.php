@@ -207,15 +207,19 @@ class MediaServer
     /**
      * 添加推流
      * @param PublishStreamInterface $stream
-     * @return mixed
+     * @return bool
      * @comment 有推流数据加入进来
      */
-    static public function addPublish($stream)
+    static public function addPublish(PublishStreamInterface $stream): bool
     {
         /** 获取推流路径  */
         $path = $stream->getPublishPath();
+        /** warning：这里屏蔽错误处理 */
+        \set_error_handler(function(){});
         /** 初始化尚未开始推流 */
         $stream->is_on_frame = false;
+        /** warning：恢复错误处理 */
+        \restore_error_handler();
         /** 绑定事件推流准备事件  */
         $stream->on('on_publish_ready', function () use ($path) {
             /** 获取所有的播放设备 */

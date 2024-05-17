@@ -208,12 +208,6 @@ class TcpConnection extends ConnectionInterface
     protected $_sslHandshakeCompleted = false;
 
     /**
-     * 当前实例所有的链接
-     * @var array
-     */
-    public static $connections = array();
-
-    /**
      * 状态码字典
      * @var array
      */
@@ -255,8 +249,6 @@ class TcpConnection extends ConnectionInterface
         $this->maxSendBufferSize        = self::$defaultMaxSendBufferSize;
         $this->maxPackageSize           = self::$defaultMaxPackageSize;
         $this->_remoteAddress           = $remote_address;
-        /** 保存链接 */
-        static::$connections[$this->id] = $this;
         /** 初始化链接的内容为空 */
         $this->context = new \stdClass;
     }
@@ -311,8 +303,7 @@ class TcpConnection extends ConnectionInterface
             return;
         }
 
-        /** 如果暂存区是空的 */
-        // Attempt to send data directly.
+        /** 如果暂存区是空的 直接发送 */
         if ($this->_sendBuffer === '') {
             /** 如果传输协议是ssl */
             if ($this->transport === 'ssl') {
@@ -365,7 +356,7 @@ class TcpConnection extends ConnectionInterface
             }
             /** 给客户端添加可写事件，当客户端链接空闲的时候，发送数据 */
             RtmpDemo::instance()->add($this->_socket, EventInterface::EV_WRITE, array($this, 'baseWrite'));
-            // Check if the send buffer will be full.
+            /** 检查暂存区是否已满 */
             $this->checkBufferWillFull();
             return;
         }
@@ -374,9 +365,8 @@ class TcpConnection extends ConnectionInterface
             ++self::$statistics['send_fail'];
             return false;
         }
-
+        /** 数据存入暂存区 */
         $this->_sendBuffer .= $send_buffer;
-        // Check if the send buffer is full.
         $this->checkBufferWillFull();
     }
 
@@ -553,7 +543,6 @@ class TcpConnection extends ConnectionInterface
         } catch (\Exception $e) {}
 
         /** 如果数据为空 */
-        // Check connection closed.
         if ($buffer === '' || $buffer === false) {
             /** 如果要检查 ，关闭链接 */
             if ($check_eof && (\feof($socket) || !\is_resource($socket) || $buffer === false)) {
@@ -571,31 +560,26 @@ class TcpConnection extends ConnectionInterface
             $parser = $this->protocol;
             /** 如果有数据 */
             while ($this->_recvBuffer !== '' && !$this->_isPaused) {
-                // The current packet length is known.
                 if ($this->_currentPackageLength) {
                     /** 如果当前包的长度大于暂存区数据长度，说明还没有接收完数据，请继续接收数据 */
-                    // Data is not enough for a package.
                     if ($this->_currentPackageLength > \strlen($this->_recvBuffer)) {
                         break;
                     }
                 } else {
-                    // Get current package length.
                     try {
                         /** 检查包的完整性 如果是rtmp协议，那么这里返回了0 */
                         $this->_currentPackageLength = $parser::input($this->_recvBuffer, $this);
                     } catch (\Exception $e) {}
-                    // The packet length is unknown.
                     /** 如果返回的是0 则需要读取更多的数据，就是客户端数据还没有发送完，还不知道包的长度是多少 */
                     if ($this->_currentPackageLength === 0) {/** rtmp协议，已经截获了数据 ，返回0 程序走到这里就，数据被WMBufferStream触发ondata事件来处理 */
                         break;
                         /** 包长度小于 系统设定最大包长度 */
                     } elseif ($this->_currentPackageLength > 0 && $this->_currentPackageLength <= $this->maxPackageSize) {
-                        // Data is not enough for a package.
                         /** 还没有接收完数据 */
                         if ($this->_currentPackageLength > \strlen($this->_recvBuffer)) {
                             break;
                         }
-                    } // Wrong package.
+                    }
                     else {
                         /** 错误的包 */
                         var_dump('Error package. package_length=' . \var_export($this->_currentPackageLength, true));
@@ -604,21 +588,16 @@ class TcpConnection extends ConnectionInterface
                     }
                 }
                 /** 更新请求数 */
-                // The data is enough for a packet.
                 ++self::$statistics['total_request'];
-                // The current packet length is equal to the length of the buffer.
                 /** 当前读取的数据长度和客户端传输数据长度一致 清空暂存区 */
                 if (\strlen($this->_recvBuffer) === $this->_currentPackageLength) {
                     $one_request_buffer = $this->_recvBuffer;
                     $this->_recvBuffer  = '';
                 } else {
                     /** 处理的数据 只截取包的长度 ，更新暂存区内容 */
-                    // Get a full package from the buffer.
                     $one_request_buffer = \substr($this->_recvBuffer, 0, $this->_currentPackageLength);
-                    // Remove the current package from the receive buffer.
                     $this->_recvBuffer = \substr($this->_recvBuffer, $this->_currentPackageLength);
                 }
-                // Reset the current packet length to 0.
                 /** 还原包的长度 */
                 $this->_currentPackageLength = 0;
                 /** 如果未定义消息处理回调函数 */
@@ -627,7 +606,6 @@ class TcpConnection extends ConnectionInterface
                 }
                 try {
                     /** 先对数据解码 调用这个协议定义的回调事件处理逻辑 实际上在建立链接的时候就定义了数据处理回调函数 flv数据将会调用HttpWMServer的onHttpRequest函数处理数据 */
-                    // Decode request buffer before Emitting onMessage callback.
                     \call_user_func($this->onMessage, $this, $parser::decode($one_request_buffer, $this));
                 } catch (\Exception $e) {
                     var_dump($e->getMessage());
@@ -686,7 +664,6 @@ class TcpConnection extends ConnectionInterface
             RtmpDemo::instance()->del($this->_socket, EventInterface::EV_WRITE);
             /** 清空暂存区 */
             $this->_sendBuffer = '';
-            // Try to emit onBufferDrain callback when the send buffer becomes empty.
             /** 出发暂存区空闲事件 */
             if ($this->onBufferDrain) {
                 try {
@@ -833,7 +810,7 @@ class TcpConnection extends ConnectionInterface
      */
     protected function bufferIsFull()
     {
-        // Buffer has been marked as full but still has data to send then the packet is discarded.
+        /** 暂存区已满，但是还有数据需要发送 ，数据包被丢弃 */
         if ($this->maxSendBufferSize <= \strlen($this->_sendBuffer)) {
             if ($this->onError) {
                 try {
@@ -864,25 +841,21 @@ class TcpConnection extends ConnectionInterface
      */
     public function destroy()
     {
-        // Avoid repeated calls.
         if ($this->_status === self::STATUS_CLOSED) {
             return;
         }
         /** 移除所有的监听事件 */
-        // Remove event listener.
         RtmpDemo::instance()->del($this->_socket, EventInterface::EV_READ);
         RtmpDemo::instance()->del($this->_socket, EventInterface::EV_WRITE);
 
         /** 关闭链接socket */
-        // Close socket.
         try {
             @\fclose($this->_socket);
         } catch (\Exception $e) {
             var_dump($e->getMessage());
         }
-
+        /** 修改链接状态为已关闭 */
         $this->_status = self::STATUS_CLOSED;
-        // Try to emit onClose callback.
         /** 出发关闭回调函数 */
         if ($this->onClose) {
             try {
@@ -892,8 +865,7 @@ class TcpConnection extends ConnectionInterface
                 var_dump($e->getMessage());
             }
         }
-        /** 出发协议的关闭事件 */
-        // Try to emit protocol::onClose
+        /** 触发协议的关闭事件 */
         if ($this->protocol && \method_exists($this->protocol, 'onClose')) {
             try {
                 \call_user_func(array($this->protocol, 'onClose'), $this);
@@ -906,14 +878,14 @@ class TcpConnection extends ConnectionInterface
         $this->_currentPackageLength = 0;
         $this->_isPaused = $this->_sslHandshakeCompleted = false;
         if ($this->_status === self::STATUS_CLOSED) {
-            // Cleaning up the callback to avoid memory leaks.
             /** 清空所有回调函数 */
             $this->onMessage = $this->onClose = $this->onError = $this->onBufferFull = $this->onBufferDrain = null;
             /** 删除这个链接的信息 */
             if ($this->worker) {
                 unset($this->worker->connections[$this->_id]);
             }
-            unset(static::$connections[$this->_id]);
+            /** 释放链接 */
+            unset(RtmpDemo::$allSocket[(int)$this->_socket]);
         }
     }
 

@@ -16,6 +16,7 @@
     /** 直播服务器可以使用 parse_livego 或者php_rtmp 或者 lalserver-golang 这三个项目，也可以使用nginx作为直播服务器 */
     var player = new Aliplayer({
             "id": "player-con",
+            /** 可以切换两种播放协议 */
             "source": "http://127.0.0.1:8501/a/b.flv",
            // "source": "ws://127.0.0.1:8501/a/b.flv",
             "width": "100%",
