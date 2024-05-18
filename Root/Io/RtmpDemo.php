@@ -368,22 +368,6 @@ class RtmpDemo
                                 /** web服务器使用http协议 */
                                 if (self::$webServerSocket && $fd == self::$webServerSocket){
                                     $connection->protocol = Http::class;
-                                    $connection->onMessage = function ($connection,Request  $request){
-                                        /** 获取文件的路径 */
-                                        $path = $request->path();
-                                        $file = dirname(dirname(__DIR__)).'/hls/'.$path;
-                                        if (is_file($file)){
-                                            /** 允许跨域 */
-                                            $response = new Response(200,['Access-Control-Allow-Origin'=>'*']);
-                                            /** 返回文件 */
-                                            $response->file($file);
-                                            /** 发送文件 */
-                                            $connection->send($response);
-                                        }else{
-                                            /** 返回404 */
-                                            $connection->send(new Response(404,['Access-Control-Allow-Origin'=>'*'],'not found'));
-                                        }
-                                    };
                                 }
                                 /** 处理rtmp链接的数据 */
                                 new \MediaServer\Rtmp\RtmpStream(

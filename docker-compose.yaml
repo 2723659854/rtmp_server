@@ -5,7 +5,7 @@ services:
   # 第一个服务名称
   php:
     # 容器名称
-    container_name: my_php
+    container_name: my_php_8
     # 是否自动重启：是
     restart: always
     # 容器使用的镜像名称 可以是本地的镜像名称，也可以线上的镜像名称 ，也可以直接填镜像的ID,如果重新编辑了Dockerfile文件，

@@ -4,6 +4,9 @@ namespace MediaServer\Utils;
 
 use Evenement\EventEmitterInterface;
 use Evenement\EventEmitterTrait;
+use Root\Protocols\Http;
+use Root\Request;
+use Root\Response;
 use Root\rtmp\TcpConnection;
 
 /**
@@ -32,6 +35,10 @@ class WMBufferStream implements  EventEmitterInterface
         if (!$this->connection->protocol){
             $this->connection->protocol = $this;
         }
+        /** 如果协议类型是hls 那么就需要处理hls数据 */
+        if ($this->connection->protocol == Http::class){
+            $this->connection->onMessage = [$this,'onHlsMessage'];
+        }
         $this->connection->onClose = [$this,'_onClose'];
         $this->connection->onError = [$this,'_onError'];
     }
@@ -39,6 +46,28 @@ class WMBufferStream implements  EventEmitterInterface
 /*    public function __destruct(){
         logger()->info("WMBufferStream destruct");
     }*/
+
+    /**
+     * 处理hls协议
+     * @param $connection
+     * @param Request $request
+     */
+    public function onHlsMessage($connection,Request  $request){
+        /** 获取文件的路径 */
+        $path = $request->path();
+        $file = dirname(dirname(__DIR__)).'/hls/'.$path;
+        if (is_file($file)){
+            /** 允许跨域 */
+            $response = new Response(200,['Access-Control-Allow-Origin'=>'*']);
+            /** 返回文件 */
+            $response->file($file);
+            /** 发送文件 */
+            $connection->send($response);
+        }else{
+            /** 返回404 */
+            $connection->send(new Response(404,['Access-Control-Allow-Origin'=>'*'],'not found'));
+        }
+    }
 
     public function _onClose($con){
         $this->connection->protocol = null;
