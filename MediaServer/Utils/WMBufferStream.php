@@ -37,6 +37,7 @@ class WMBufferStream implements  EventEmitterInterface
         }
         /** 如果协议类型是hls 那么就需要处理hls数据 */
         if ($this->connection->protocol == Http::class){
+            var_dump('12312312');
             $this->connection->onMessage = [$this,'onHlsMessage'];
         }
         $this->connection->onClose = [$this,'_onClose'];
@@ -65,7 +66,7 @@ class WMBufferStream implements  EventEmitterInterface
             $connection->send($response);
         }else{
             /** 返回404 */
-            $connection->send(new Response(404,['Access-Control-Allow-Origin'=>'*'],'not found'));
+            $connection->send(new Response(404,['Access-Control-Allow-Origin'=>'*'],'hls not found'));
         }
     }
 

@@ -2,10 +2,12 @@
 hls协议详解
 https://blog.csdn.net/qq_41839588/article/details/134093390
 
-安装ffmpeg软件
+## 安装ffmpeg软件
 apk add ffmpeg
-
-ffmpeg -i rtmp://yourserver/live/streamName -c copy -f hls -hls_list_size 0 -hls_time 60 /path/to/hls/output/streamName.m3u8
-ffmpeg -i rtmp://127.0.0.1/a/b -c copy -f hls -hls_list_size 0 -hls_time 60 ./hls/b.m3u8
-下面这个命令生成hls格式文件可以使用VLC播放的
-ffmpeg -i rtmp://127.0.0.1/a/b -c:v h264 -c:a aac -f hls -hls_time 60 -hls_list_size 0  out ./hls/put.m3u8
+推流
+## 切面间隔 3秒 创建一个索引
+ffmpeg -i rtmp://127.0.0.1/a/b -c:v h264 -c:a aac -f hls -hls_time 3 -hls_list_size 0   ./hls/put.m3u8
+## 切面间隔 1秒 创建一个索引
+ffmpeg -i rtmp://127.0.0.1/a/b -c:v h264 -c:a aac -f hls -hls_time 1 -hls_list_size 0   ./hls/put.m3u8
+## 切面间隔 15秒 创建一个索引
+ffmpeg -i rtmp://127.0.0.1/a/b -c:v h264 -c:a aac -f hls -hls_time 15 -hls_list_size 0   ./hls/put.m3u8
