@@ -14,6 +14,13 @@ composer create-project xiaosongshu/rtmp_server
 ```bash 
 docker-compose up -d
 ```
+本项目自带的docker配置已经集成了php相关扩展和ffmpeg。<br>
+本项目默认使用三个端口：
+```text
+1935:rtmp服务
+8501:flv服务
+80:web服务
+```
 ### 开启服务
 进入本项目的根目录，在命令行执行以下命令：
 ```bash 
@@ -61,13 +68,13 @@ httpflv播放地址: http://127.0.0.1:8501/a/b.flv
 
 wsflv播放地址: ws://127.0.0.1:8501/a/b.flv
 
-hls播放地址：http://my.play.com/hls/a/b.m3u8 （需要使用ffmpeg转换协议）
+hls播放地址：http://127.0.0.1:80/hls/a/b.m3u8 （需要使用ffmpeg转换协议）
 ```
 播放工具可以使用:<br>
 <a href="https://get.videolan.org/vlc/3.0.20/win64/vlc-3.0.20-win64.exe">VLC</a>打开网络串流地址<br>
 <a href="https://ffmpeg.org/">ffplay</a> ``` ffplay rtmp://127.0.0.1/a/b ```<br>
-本项目提供网页播放，直接使用浏览器打开index.html即可<a href="./index.html">播放flv</a>。<br>
-本项目提供网页播放，直接使用浏览器打开index.html即可<a href="./play.html">播放hls</a>。<br>
+本项目提供网页播放，直接使用浏览器打开index.html即可<a href="http://127.0.0.1:80/index.html">播放flv</a>。<br>
+本项目提供网页播放，直接使用浏览器打开index.html即可<a href="http://127.0.0.1:80/play.html">播放hls</a>。<br>
 
 ### 延迟问题
 

@@ -4,14 +4,16 @@
     <title>HLS Video 播放</title>
     <meta charset="UTF-8">
     <!--<script src="https://cdn.jsdelivr.net/npm/hls.js@latest/dist/hls.min.js"></script>-->
+    <!-- 使用docker 下面的js不能正确加载，所以使用上面的网络地址，目前还没有找到原因 -->
     <script src="./hls.min.js"></script>
 </head>
 <body>
+<h5>测试hls 2134213123</h5>
 <video id="video" muted controls></video>
 
 <script>
+    var video = document.getElementById('video');
     if(Hls.isSupported()) {
-        var video = document.getElementById('video');
         var hls = new Hls();
         /** 请更换为自己的播放地址 */
         hls.loadSource('http://my.play.com/hls/a/b.m3u8');

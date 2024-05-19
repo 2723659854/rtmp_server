@@ -145,6 +145,7 @@ class BaseResponse
         $this->_status = $status;
         $this->_header = $headers;
         $this->_body = (string)$body;
+        static::initMimeTypeMap();
     }
 
     /**

@@ -13,7 +13,7 @@ use Root\rtmp\TcpConnection;
  * 这是编写的一个协议wmbuffer协议
  * @purpose 这个是rtmp推送的字节流数据
  */
-class WMBufferStream implements  EventEmitterInterface
+class WMBufferStream implements EventEmitterInterface
 {
     use EventEmitterTrait;
 
@@ -24,59 +24,97 @@ class WMBufferStream implements  EventEmitterInterface
      * @var TcpConnection
      */
     public $connection;
+
     /**
      * WMStreamProtocol constructor.
      * @param $connection TcpConnection
      */
-    public function  __construct($connection){
+    public function __construct($connection)
+    {
         $this->connection = $connection;
         /** 当tcp数据传输进来之后，在这里更换为当前的wmbuffer协议，然后connection对象读取数据的时候会使用本协议的input方法 是tcpConnection.php 的 baseRead 方法调用的 */
         /** 就不更改协议了，默认的rtmp必须使用本协议 */
-        if (!$this->connection->protocol){
+        if (!$this->connection->protocol) {
             $this->connection->protocol = $this;
         }
         /** 如果协议类型是hls 那么就需要处理hls数据 */
-        if ($this->connection->protocol == Http::class){
-            var_dump('12312312');
-            $this->connection->onMessage = [$this,'onHlsMessage'];
+        if ($this->connection->protocol == Http::class) {
+            $this->connection->onMessage = [$this, 'onHlsMessage'];
         }
-        $this->connection->onClose = [$this,'_onClose'];
-        $this->connection->onError = [$this,'_onError'];
+        $this->connection->onClose = [$this, '_onClose'];
+        $this->connection->onError = [$this, '_onError'];
     }
 
-/*    public function __destruct(){
-        logger()->info("WMBufferStream destruct");
-    }*/
+    /*    public function __destruct(){
+            logger()->info("WMBufferStream destruct");
+        }*/
 
     /**
      * 处理hls协议
      * @param $connection
      * @param Request $request
      */
-    public function onHlsMessage($connection,Request  $request){
+    public function onHlsMessage($connection, Request $request)
+    {
+        /** web服务头部设置 */
+        $headerType = [
+            'html' => 'text/html; charset=UTF-8',
+            'js' => 'text/javascript; charset=UTF-8',
+            'css' => 'text/css; charset=UTF-8',
+            'ico' => 'image/jpeg; charset=UTF-8',
+        ];
         /** 获取文件的路径 */
         $path = $request->path();
-        $file = dirname(dirname(__DIR__)).'/hls/'.$path;
-        if (is_file($file)){
-            /** 允许跨域 */
-            $response = new Response(200,['Access-Control-Allow-Origin'=>'*']);
-            /** 返回文件 */
-            $response->file($file);
-            /** 发送文件 */
-            $connection->send($response);
-        }else{
+        /** web服务在docker环境无法正常返回静态文件 */
+        //$webExtension = ['html', 'ico', 'css', 'js',];
+        $webExtension = [];
+        $flvExtension = ['m3u8', 'ts'];
+        $requestFileExtension = pathinfo($path, PATHINFO_EXTENSION);
+        if (!in_array($requestFileExtension, array_merge($flvExtension, $webExtension))) {
             /** 返回404 */
-            $connection->send(new Response(404,['Access-Control-Allow-Origin'=>'*'],'hls not found'));
+            $connection->send(new Response(404, ['Access-Control-Allow-Origin' => '*'], 'not found'));
+        }
+        /** 拼接文件路径 */
+        if (in_array($requestFileExtension, $webExtension)) {
+            $file = dirname(dirname(__DIR__)) . DIRECTORY_SEPARATOR . $path;
+        } else {
+            $file = dirname(dirname(__DIR__)) . DIRECTORY_SEPARATOR . 'hls' . DIRECTORY_SEPARATOR . $path;
+        }
+        if (!is_file($file)) {
+            /** 返回404 */
+            $connection->send(new Response(404, ['Access-Control-Allow-Origin' => '*'], 'not found'));
+        }
+        /** 允许跨域 */
+        $header = [
+            'Access-Control-Allow-Origin' => '*',
+            'Access-Control-Allow-Methods' => '*',
+            'Access-Control-Allow-Headers' => '*',
+        ];
+        if (in_array($requestFileExtension, $webExtension)) {
+            $content = file_get_contents($file);
+            $header ['Content-Type'] = $headerType[$requestFileExtension];
+            $header ['Content-Length'] = strlen($content);
+
+            $response = new Response(200, $header, $content);
+            $connection->send($response);
+
+        } else {
+            $response = new Response(200, $header);
+            $response->file($file);
+            $connection->send($response);
         }
     }
 
-    public function _onClose($con){
+    public function _onClose($con)
+    {
         $this->connection->protocol = null;
         $this->connection = null;
         $this->emit("onClose");
         $this->removeAllListeners();
     }
-    public function _onError($con,$code,$msg){
+
+    public function _onError($con, $code, $msg)
+    {
         $this->emit("onError");
     }
 
@@ -85,7 +123,8 @@ class WMBufferStream implements  EventEmitterInterface
      * @param $connection TcpConnection
      * @comment 这个方法在哪里被调用了？？
      */
-    public static function input($buffer,$connection){
+    public static function input($buffer, $connection)
+    {
         /** 这里传输的数据很多是二进制数据，需要转码才能看懂 */
         //logger()->info("[input_data]".$buffer);
         // 在这里切换了协议，调用当前协议处理类
@@ -95,7 +134,7 @@ class WMBufferStream implements  EventEmitterInterface
         //reset recv buffer
         $me->recvBuffer($buffer);
         /** 触发onData函数 ，前面RtmpStream.php 在初始化的时候已经绑定了这个事件 */
-        $me->emit("onData",[$me]);
+        $me->emit("onData", [$me]);
         // clear connection recv buffer
         $me->clearConnectionRecvBuffer();
         /** 这里处理完成之后，返回0 ，tcpConnection方法不会就不会触发onmessage方法了 */
@@ -109,7 +148,8 @@ class WMBufferStream implements  EventEmitterInterface
      * @return mixed
      * @comment  这个是tcpConnection编码需要调用的
      */
-    public static function encode($buffer,$connection){
+    public static function encode($buffer, $connection)
+    {
         return $buffer;
     }
 
@@ -120,7 +160,8 @@ class WMBufferStream implements  EventEmitterInterface
      * @return mixed
      * @comment 这个是tcpConnection解码需要调用的
      */
-    public static function decode($buffer,$connection){
+    public static function decode($buffer, $connection)
+    {
         return $buffer;
     }
 
@@ -230,7 +271,8 @@ class WMBufferStream implements  EventEmitterInterface
      * @param $data
      * @return $this
      */
-    public function recvBuffer($data){
+    public function recvBuffer($data)
+    {
         $this->_data = $data;
         return $this->begin();
     }
@@ -239,7 +281,8 @@ class WMBufferStream implements  EventEmitterInterface
      * 获取当前接收数据长度
      * @return int
      */
-    public function recvSize(){
+    public function recvSize()
+    {
         return strlen($this->_data);
     }
 
@@ -247,7 +290,8 @@ class WMBufferStream implements  EventEmitterInterface
      * 获取当前已处理长度
      * @return int
      */
-    public function handledSize(){
+    public function handledSize()
+    {
         return $this->_index;
     }
 
@@ -256,7 +300,8 @@ class WMBufferStream implements  EventEmitterInterface
      * @return void
      * @comment 这里是清空了tcp缓冲池上的缓存
      */
-    public function clearConnectionRecvBuffer(){
+    public function clearConnectionRecvBuffer()
+    {
         $this->connection->consumeRecvBuffer($this->_index);
     }
 
