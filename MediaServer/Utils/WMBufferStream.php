@@ -62,12 +62,13 @@ class WMBufferStream implements EventEmitterInterface
             'js' => 'text/javascript; charset=UTF-8',
             'css' => 'text/css; charset=UTF-8',
             'ico' => 'image/jpeg; charset=UTF-8',
+            'm3u8' => 'application/vnd.apple.mpegurl',
+            'ts' => 'video/mp2t',
         ];
         /** 获取文件的路径 */
         $path = $request->path();
         /** web服务在docker环境无法正常返回静态文件 */
         $webExtension = ['html', 'ico', 'css', 'js',];
-        //$webExtension = [];
         $flvExtension = ['m3u8', 'ts'];
         $requestFileExtension = pathinfo($path, PATHINFO_EXTENSION);
         if (!in_array($requestFileExtension, array_merge($flvExtension, $webExtension))) {
@@ -83,21 +84,16 @@ class WMBufferStream implements EventEmitterInterface
         /** 允许跨域 */
         $header = [
             'Access-Control-Allow-Origin' => '*',
-            'Access-Control-Allow-Methods' => '*',
-            'Access-Control-Allow-Headers' => '*',
         ];
-        if (in_array($requestFileExtension, $webExtension)) {
+        if (in_array($requestFileExtension,  array_merge($flvExtension, $webExtension))) {
             $content = file_get_contents($file);
             $header ['Content-Type'] = $headerType[$requestFileExtension];
             $header ['Content-Length'] = strlen($content);
-
             $response = new Response(200, $header, $content);
             $connection->send($response);
-
         } else {
-            $response = new Response(200, $header);
-            $response->file($file);
-            $connection->send($response);
+            /** 返回404 */
+            $connection->send(new Response(404, ['Access-Control-Allow-Origin' => '*'], 'not found'));
         }
     }
 
