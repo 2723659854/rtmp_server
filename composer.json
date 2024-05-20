@@ -1,5 +1,12 @@
 {
     "name": "xiaosongshu/rtmp-demo",
+    "description": "A RTMP live streaming server written in PHP",
+    "keywords": [
+        "rtmp",
+        "php rtmp",
+        "flv",
+        "hls"
+    ],
     "type": "project",
     "license": "MIT",
     "authors": [
