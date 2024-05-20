@@ -5,3 +5,5 @@
 nginx.htaccess
 *.mp4
 /hls/*
+*.m3u8
+*.ts

@@ -66,8 +66,8 @@ class WMBufferStream implements EventEmitterInterface
         /** 获取文件的路径 */
         $path = $request->path();
         /** web服务在docker环境无法正常返回静态文件 */
-        //$webExtension = ['html', 'ico', 'css', 'js',];
-        $webExtension = [];
+        $webExtension = ['html', 'ico', 'css', 'js',];
+        //$webExtension = [];
         $flvExtension = ['m3u8', 'ts'];
         $requestFileExtension = pathinfo($path, PATHINFO_EXTENSION);
         if (!in_array($requestFileExtension, array_merge($flvExtension, $webExtension))) {
@@ -75,11 +75,7 @@ class WMBufferStream implements EventEmitterInterface
             $connection->send(new Response(404, ['Access-Control-Allow-Origin' => '*'], 'not found'));
         }
         /** 拼接文件路径 */
-        if (in_array($requestFileExtension, $webExtension)) {
-            $file = dirname(dirname(__DIR__)) . DIRECTORY_SEPARATOR . $path;
-        } else {
-            $file = dirname(dirname(__DIR__)) . DIRECTORY_SEPARATOR . 'hls' . DIRECTORY_SEPARATOR . $path;
-        }
+        $file = dirname(dirname(__DIR__)) .  DIRECTORY_SEPARATOR . $path;
         if (!is_file($file)) {
             /** 返回404 */
             $connection->send(new Response(404, ['Access-Control-Allow-Origin' => '*'], 'not found'));
