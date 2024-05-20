@@ -1,5 +1,5 @@
 {
-    "name": "xiaosongshu/rtmp-demo",
+    "name": "xiaosongshu/rtmp_server",
     "description": "A RTMP live streaming server written in PHP",
     "keywords": [
         "rtmp",
