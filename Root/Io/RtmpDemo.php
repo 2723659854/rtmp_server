@@ -3,8 +3,6 @@
 namespace Root\Io;
 
 use Root\Protocols\Http;
-use Root\Request;
-use Root\Response;
 use Root\rtmp\TcpConnection;
 
 /**
@@ -66,22 +64,8 @@ class RtmpDemo
     /** web服务器 */
     private static $webServerSocket = null;
 
-    /**
-     * PHP 默认支持的协议
-     * @var array
-     */
-    protected static $_builtinTransports = array(
-        'tcp' => 'tcp',
-        'udp' => 'udp',
-        'unix' => 'unix',
-        'ssl' => 'tcp'
-    );
-
     /** @var string $transport 默认通信传输协议 */
     public $transport = 'tcp';
-
-    /** 监听地址 */
-    public string $listeningAddress = '';
 
     /** 服务端socket */
     private array $serverSocket = [];
@@ -92,35 +76,6 @@ class RtmpDemo
      */
     public function __construct()
     {
-    }
-
-    /**
-     * 解析协议和监听地址
-     * @param string $socketName 协议名称
-     * @return string|void
-     * @throws \Exception
-     */
-    public function parseSocketAddress($socketName)
-    {
-        if (!$socketName) {
-            return;
-        }
-        /** 获取协议类型和监听地址 */
-        list($scheme, $address) = \explode(':', $socketName, 2);
-        /** 如果不是php自带的协议类型 */
-        if (!isset(static::$_builtinTransports[$scheme])) {
-            $scheme = \ucfirst($scheme);
-            /** 加载扩展协议 */
-            $this->protocol = \substr($scheme, 0, 1) === '\\' ? $scheme : 'Protocols\\' . $scheme;
-            if (!isset(static::$_builtinTransports[$this->transport])) {
-                /** 不支持的协议 */
-                throw new \Exception('Bad transport ' . \var_export($this->transport, true));
-            }
-        } else {
-            $this->transport = $scheme;
-        }
-        /** 返回监听地址 */
-        return static::$_builtinTransports[$this->transport] . ":" . $address;
     }
 
     /**
@@ -180,18 +135,43 @@ class RtmpDemo
         return false;
     }
 
+
+    /**
+     * 创建flv播放服务
+     * @return void
+     */
+    public function createFlvSever()
+    {
+        /** 保存flv服务端的socket */
+        self::$flvServerSocket = $this->createServer($this->flvPort);
+    }
+
+    /**
+     * 创建rtmp服务
+     */
+    private function createRtmpServer()
+    {
+        $this->createServer($this->rtmpPort);
+    }
+
+    /**
+     * 创建web服务器
+     * @return void
+     */
+    private function createWebServer()
+    {
+        self::$webServerSocket = $this->createServer($this->webPort);
+    }
+
     /**
      * 创建服务器
+     * @param string $port 监听端口
      * @return false|resource
      */
-    private function createServer()
+    private function createServer(string $port)
     {
         /** @var string $listeningAddress 拼接监听地址 */
-        if ($this->listeningAddress) {
-            $listeningAddress = $this->listeningAddress;
-        } else {
-            $listeningAddress = $this->protocol . '://' . $this->host . ':' . $this->rtmpPort;
-        }
+        $listeningAddress = $this->protocol . '://' . $this->host . ':' . $port;
         echo "开始监听{$listeningAddress}\r\n";
         /** 不验证https证书 */
         $contextOptions['ssl'] = ['verify_peer' => false, 'verify_peer_name' => false];
@@ -211,24 +191,6 @@ class RtmpDemo
         $this->serverSocket[(int)$socket] = $socket;
         /** 返回服务器实例 */
         return $socket;
-    }
-
-    /**
-     * 创建flv播放服务
-     * @return void
-     */
-    public function createFlvSever()
-    {
-        /** 保存flv服务端的socket */
-        self::$flvServerSocket = $this->createServer();
-    }
-
-    /**
-     * 创建rtmp服务
-     */
-    private function createRtmpServer()
-    {
-        $this->createServer();
     }
 
     /**
@@ -241,55 +203,6 @@ class RtmpDemo
             self::$instance = new self();
         }
         return self::$instance;
-    }
-
-    /**
-     * 创建web服务
-     * @return false|resource
-     * @note 本项目只提供hls相关文件下载，不提供其他的web服务
-     */
-    public function createWebServer()
-    {
-        /** @var string $listeningAddress 拼接监听地址 */
-        $listeningAddress = 'tcp://' . $this->host . ':' . $this->webPort;
-        echo "开始监听{$listeningAddress}\r\n";
-        /** 不验证https证书 */
-        $contextOptions['ssl'] = ['verify_peer' => false, 'verify_peer_name' => false];
-        /** 配置socket流参数 */
-        $context = stream_context_create($contextOptions);
-        /** 设置端口复用 解决惊群效应  */
-        stream_context_set_option($context, 'socket', 'so_reuseport', 1);
-        /** 设置ip复用 */
-        stream_context_set_option($context, 'socket', 'so_reuseaddr', 1);
-        /** 设置服务端：监听地址+端口 */
-        $socket = stream_socket_server($listeningAddress, $errno, $errstr, STREAM_SERVER_BIND | STREAM_SERVER_LISTEN, $context);
-        /** 设置非阻塞，语法是关闭阻塞 */
-        stream_set_blocking($socket, 0);
-        /** 将服务端保存所有socket列表  */
-        self::$allSocket[(int)$socket] = $socket;
-        /** 单独保存服务端 */
-        $this->serverSocket[(int)$socket] = $socket;
-        /** 保存web服务器 */
-        self::$webServerSocket = $socket;
-        /** 返回服务器实例 */
-        return $socket;
-
-    }
-
-    /**
-     * 检查是否安装ffmpeg
-     * @return bool
-     */
-    public function hasFfmpeg()
-    {
-        // 执行ffmpeg命令并捕获输出
-        $output = shell_exec('ffmpeg -version 2>&1');
-        // 检查输出中是否包含FFmpeg的版本信息
-        if (strpos($output, 'ffmpeg version') !== false) {
-            return true;
-        } else {
-            return false;
-        }
     }
 
     /**
@@ -314,7 +227,7 @@ class RtmpDemo
      */
     private function startFlv()
     {
-        new \MediaServer\Http\HttpWMServer("\\MediaServer\\Http\\ExtHttpProtocol://0.0.0.0:" . $this->flvPort, $this);
+        new \MediaServer\Http\HttpWMServer($this);
     }
 
 
@@ -366,7 +279,7 @@ class RtmpDemo
                                     $connection->onWebSocketConnect = $this->onWebSocketConnect;
                                 }
                                 /** web服务器使用http协议 */
-                                if (self::$webServerSocket && $fd == self::$webServerSocket){
+                                if (self::$webServerSocket && $fd == self::$webServerSocket) {
                                     $connection->protocol = Http::class;
                                 }
                                 /** 处理rtmp链接的数据 */

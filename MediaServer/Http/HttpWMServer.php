@@ -20,16 +20,14 @@ class HttpWMServer
 {
     static $publicPath = '';
 
-    public  function __construct($socket_name = '', RtmpDemo $server = null)
+    public function __construct(RtmpDemo $server = null)
     {
-        /** 解析协议并设置flv监听地址 */
-        $server->listeningAddress = $server->parseSocketAddress($socket_name);
         /** 创建flv服务器 */
         $server->createFlvSever();
         /** 绑定ws请求响应事件 */
-        $server->onWebSocketConnect = [$this,'onWebsocketRequest'];
+        $server->onWebSocketConnect = [$this, 'onWebsocketRequest'];
         /** 绑定http请求事件 */
-        $server->onMessage = [$this,'onHttpRequest'];
+        $server->onMessage = [$this, 'onHttpRequest'];
     }
 
     /**
@@ -38,13 +36,14 @@ class HttpWMServer
      * @param $headerData
      * @return void
      */
-    public function onWebsocketRequest($connection,$headerData){
+    public function onWebsocketRequest($connection, $headerData)
+    {
         $request = new Request($headerData);
         $request->connection = $connection;
         //ignore connection message
         $connection->onMessage = null;
-        if($this->findFlv($request,$request->path())){
-           return;
+        if ($this->findFlv($request, $request->path())) {
+            return;
         }
         $request->connection->close();
         return;
@@ -56,7 +55,7 @@ class HttpWMServer
      * @param $connection TcpConnection
      * @param Request $request
      */
-    public function onHttpRequest($connection,Request  $request)
+    public function onHttpRequest($connection, Request $request)
     {
         switch ($request->method()) {
             case "GET":
@@ -81,34 +80,33 @@ class HttpWMServer
         $path = $request->path();
 
         //api
-        if($path ==='/api'){
+        if ($path === '/api') {
             $name = $request->get('name');
-            $args = $request->get('args',[]);
+            $args = $request->get('args', []);
             /** 调用媒体服务的接口 */
-            $data = MediaServer::callApi($name,$args);
-            if(!is_null($data)){
-                $request->connection->send(new Response(200,['Content-Type'=>"application/json"],json_encode($data)));
-            }else{
-                $request->connection->send(new Response(404,[],'404 Not Found'));
+            $data = MediaServer::callApi($name, $args);
+            if (!is_null($data)) {
+                $request->connection->send(new Response(200, ['Content-Type' => "application/json"], json_encode($data)));
+            } else {
+                $request->connection->send(new Response(404, [], '404 Not Found'));
             }
             return;
         }
         //flv
-        if(
-            $this->unsafeUri($request,$path) ||
-            $this->findFlv($request,$path) ||
-            $this->findStaticFile($request,$path)
-        ){
+        if (
+            $this->unsafeUri($request, $path) ||
+            $this->findFlv($request, $path) ||
+            $this->findStaticFile($request, $path)
+        ) {
             return;
         }
 
         //api
 
         //404
-        $request->connection->send(new Response(404,[],'404 Not Found'));
+        $request->connection->send(new Response(404, [], '404 Not Found'));
         return;
     }
-
 
 
     /**
@@ -122,7 +120,7 @@ class HttpWMServer
     {
         $path = $request->getUri()->getPath();
         $bodyStream = $request->getBody();
-        if(!$bodyStream instanceof StreamInterface || !$bodyStream instanceof ReadableStreamInterface){
+        if (!$bodyStream instanceof StreamInterface || !$bodyStream instanceof ReadableStreamInterface) {
             return new Response(
                 500,
                 ['Content-Type' => 'text/plain'],
@@ -155,11 +153,13 @@ class HttpWMServer
             });
             /** 绑定error事件 */
             $flvReadStream->on('error', function (\Exception $exception) use ($reject, &$bytes) {
-                $reject(new Response(
-                    400,
-                    ['Content-Type' => 'text/plain'],
-                    $exception->getMessage()
-                ));
+                $reject(
+                    new Response(
+                        400,
+                        ['Content-Type' => 'text/plain'],
+                        $exception->getMessage()
+                    )
+                );
             });
         });
     }
@@ -170,7 +170,7 @@ class HttpWMServer
      * @param $path
      * @return bool
      */
-    public function unsafeUri(Request $request,$path): bool
+    public function unsafeUri(Request $request, $path): bool
     {
         if (
             !$path ||
@@ -178,7 +178,7 @@ class HttpWMServer
             strpos($path, "\\") !== false ||
             strpos($path, "\0") !== false
         ) {
-            $request->connection->send(new Response(404,[],'404 Not Found.'));
+            $request->connection->send(new Response(404, [], '404 Not Found.'));
             return true;
         }
         return false;
@@ -190,16 +190,17 @@ class HttpWMServer
      * @param $path
      * @return bool
      */
-    public function findStaticFile(Request $request,$path){
+    public function findStaticFile(Request $request, $path)
+    {
 
         if (preg_match('/%[0-9a-f]{2}/i', $path)) {
             $path = urldecode($path);
-            if ($this->unsafeUri($request,$path)) {
+            if ($this->unsafeUri($request, $path)) {
                 return true;
             }
         }
 
-        $file = self::$publicPath."/$path";
+        $file = self::$publicPath . "/$path";
         if (!is_file($file)) {
             return false;
         }
@@ -215,12 +216,13 @@ class HttpWMServer
      * @param $path
      * @return bool
      */
-    public function  findFlv(Request $request,$path){
-        if(!preg_match('/(.*)\.flv$/',$path,$matches)){
+    public function findFlv(Request $request, $path)
+    {
+        if (!preg_match('/(.*)\.flv$/', $path, $matches)) {
             return false;
-        }else{
-            list(,$flvPath) = $matches;
-            $this->playMediaStream($request,$flvPath);
+        } else {
+            list(, $flvPath) = $matches;
+            $this->playMediaStream($request, $flvPath);
             return true;
         }
     }
@@ -233,24 +235,25 @@ class HttpWMServer
      * @return void
      * @comment 是这里实现flv播放的 和mediaServer产生关系的
      */
-    public function playMediaStream(Request $request,$flvPath){
+    public function playMediaStream(Request $request, $flvPath)
+    {
         /** 检查是否已经有发布这个流媒体 */
         //check stream
         if (MediaServer::hasPublishStream($flvPath)) {
             /** 如果是ws协议 */
-            if($request->connection->protocol === Websocket::class){
+            if ($request->connection->protocol === Websocket::class) {
                 /** 修改ws缓冲区数据类型 为数组  */
                 $request->connection->websocketType = Websocket::BINARY_TYPE_ARRAYBUFFER;
                 /** 数据包 ws */
                 $throughStream = new WMWsChunkStream($request->connection);
-            }else{
+            } else {
                 /** 数据包 http */
                 $throughStream = new WMHttpChunkStream($request->connection);
             }
             /** 实例化flv播放资源 */
             $playerStream = new FlvPlayStream($throughStream, $flvPath);
             /** 是否关闭声音 */
-            $disableAudio = $request->get('disableAudio',false);
+            $disableAudio = $request->get('disableAudio', false);
             if ($disableAudio) {
                 $playerStream->setEnableAudio(false);
             }
@@ -269,12 +272,16 @@ class HttpWMServer
         } else {
             /** 没有这一路推流资源 直接关闭链接或者发送404 */
             logger()->warning("Stream {path} not found", ['path' => $flvPath]);
-            if($request->connection->protocol === Websocket::class){
+            if ($request->connection->protocol === Websocket::class) {
                 $request->connection->close();
-            }else{
-                $request->connection->send(new Response(404,
-                    ['Content-Type' => 'text/plain'],
-                    "Stream not found."));
+            } else {
+                $request->connection->send(
+                    new Response(
+                        404,
+                        ['Content-Type' => 'text/plain'],
+                        "Stream not found."
+                    )
+                );
             }
 
         }
