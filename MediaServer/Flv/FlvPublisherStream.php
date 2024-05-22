@@ -107,7 +107,6 @@ class FlvPublisherStream extends EventEmitter implements PublishStreamInterface
      * FlvStream constructor.
      * @param $input EventEmitter|ReadableStreamInterface
      * @param $path  string
-     * @comment 这里好像是把数据转码成flv格式
      */
     public function __construct($input, $path)
     {
