@@ -7,6 +7,8 @@ $server = \Root\Io\RtmpDemo::instance();
 $server->rtmpPort = 1935;
 /** 设置flv通信端口 可以自行修改 默认8501 */
 $server->flvPort = 8501;
+/** hls通信端口 可以自行修改 默认80  */
+$server->webPort = 80;
 /** 启动服务 */
 $server->start();
 
