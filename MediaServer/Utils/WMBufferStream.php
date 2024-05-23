@@ -62,11 +62,12 @@ class WMBufferStream implements EventEmitterInterface
     }
 
     /**
-     * @param $buffer string
-     * @param $connection TcpConnection
-     * @comment 这个方法在哪里被调用了？？
+     * 输入数据校验
+     * @param string $buffer
+     * @param TcpConnection $connection
+     * @return int
      */
-    public static function input($buffer, $connection)
+    public static function input(string $buffer, TcpConnection $connection): int
     {
         /** 这里传输的数据很多是二进制数据，需要转码才能看懂 */
         //logger()->info("[input_data]".$buffer);

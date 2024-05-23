@@ -277,10 +277,11 @@ class HttpWMServer
             if ($request->connection->protocol === Websocket::class) {
                 $request->connection->close();
             } else {
+                /** 如果没有这个媒体资源，返回404，js一共会请求6次，若都是404，之后不会再自动发起请求 */
                 $request->connection->send(
                     new Response(
                         404,
-                        ['Content-Type' => 'text/plain'],
+                        ['Content-Type' => 'text/plain','Access-Control-Allow-Origin' => '*',],
                         "Stream not found."
                     )
                 );

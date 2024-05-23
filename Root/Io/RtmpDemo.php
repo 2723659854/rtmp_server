@@ -264,7 +264,7 @@ class RtmpDemo
                                     /** 绑定消息处理回调函数 */
                                     $connection->onMessage = [new Http(),'onHlsMessage'];
                                 }
-                                /** 处理rtmp链接的数据 */
+                                /** rtmp使用WMBufferStream协议 */
                                 new \MediaServer\Rtmp\RtmpStream(
                                 /** 使用自定义协议处理传递过来的数据 rtmp是长链接 */
                                     new \MediaServer\Utils\WMBufferStream($connection)
