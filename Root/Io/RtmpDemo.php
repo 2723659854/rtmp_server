@@ -31,7 +31,7 @@ class RtmpDemo
     private string $protocol = 'tcp';
 
     /** @var ?RtmpDemo $instance rtmp服务器实例 */
-    public static ?RtmpDemo $instance = null;
+    private static ?RtmpDemo $instance = null;
 
     /** @var int 读事件 */
     const  EV_READ = 1;
@@ -55,18 +55,11 @@ class RtmpDemo
     private static $webServerSocket = null;
 
     /** @var string $transport 默认通信传输协议 */
-    public string $transport = 'tcp';
+    private string $transport = 'tcp';
 
     /** @var array $serverSocket 服务端socket */
     private array $serverSocket = [];
 
-    /**
-     * 初始化
-     * RtmpDemo constructor.
-     */
-    public function __construct()
-    {
-    }
 
     /**
      * 添加读写事件
@@ -131,7 +124,7 @@ class RtmpDemo
      * 创建flv播放服务
      * @return void
      */
-    public function createFlvSever(): void
+    private function createFlvSever(): void
     {
         /** 保存flv服务端的socket */
         self::$flvServerSocket = $this->createServer($this->flvPort);
