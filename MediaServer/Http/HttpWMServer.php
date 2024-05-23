@@ -21,23 +21,24 @@ use Root\Protocols\Websocket;
  */
 class HttpWMServer
 {
+    /** @var string $publicPath 资源路径 */
     static $publicPath = '';
 
-    public function __construct(RtmpDemo $server = null)
+    /**
+     * 初始化
+     */
+    public function __construct()
     {
-        /** 绑定ws请求响应事件 */
-        $server->onWebSocketConnect = [$this, 'onWebsocketRequest'];
-        /** 绑定http请求事件 */
-        $server->onMessage = [$this, 'onHttpRequest'];
+
     }
 
     /**
      * 定义ws请求响应方法
-     * @param $connection
-     * @param $headerData
+     * @param TcpConnection $connection
+     * @param string $headerData
      * @return void
      */
-    public function onWebsocketRequest($connection, $headerData)
+    public function onWebsocketRequest(TcpConnection $connection, string $headerData)
     {
         $request = new Request($headerData);
         $request->connection = $connection;
@@ -53,10 +54,10 @@ class HttpWMServer
 
     /**
      * http响应请求
-     * @param $connection TcpConnection
+     * @param TcpConnection $connection
      * @param Request $request
      */
-    public function onHttpRequest($connection, Request $request)
+    public function onHttpRequest(TcpConnection $connection, Request $request)
     {
         switch ($request->method()) {
             case "GET":
@@ -287,6 +288,4 @@ class HttpWMServer
 
         }
     }
-
-
 }

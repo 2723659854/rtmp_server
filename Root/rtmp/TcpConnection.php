@@ -52,7 +52,7 @@ class TcpConnection extends ConnectionInterface
     public $onMessage = null;
 
     /**
-     * @var null ws链接处理事件
+     * @var callable $onWebSocketConnect ws链接处理事件
      */
     public $onWebSocketConnect = null;
 

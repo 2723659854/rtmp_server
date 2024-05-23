@@ -2,6 +2,7 @@
 
 namespace Root\Io;
 
+use MediaServer\Http\HttpWMServer;
 use Root\Protocols\Http;
 use Root\rtmp\TcpConnection;
 
@@ -11,12 +12,6 @@ use Root\rtmp\TcpConnection;
  */
 class RtmpDemo
 {
-    /** @var callable $onMessage 设置接收http数据的回调 */
-    public $onMessage = NULL;
-
-    /** @var callable $onWebSocketConnect 设置接收ws数据的回调 */
-    public  $onWebSocketConnect = null;
-
     /** @var array $allSocket 存放所有socket 注意内存泄漏 */
     public static array $allSocket;
 
@@ -57,7 +52,7 @@ class RtmpDemo
     private static $flvServerSocket = null;
 
     /** @var resource $webServerSocket web服务器 */
-    private static  $webServerSocket = null;
+    private static $webServerSocket = null;
 
     /** @var string $transport 默认通信传输协议 */
     public string $transport = 'tcp';
@@ -140,7 +135,6 @@ class RtmpDemo
     {
         /** 保存flv服务端的socket */
         self::$flvServerSocket = $this->createServer($this->flvPort);
-        new \MediaServer\Http\HttpWMServer($this);
         logger()->info("flv服务：http://{$this->host}:{$this->flvPort}/{AppName}/{ChannelName}.flv");
         logger()->info("flv服务：ws://{$this->host}:{$this->flvPort}/{AppName}/{ChannelName}.flv");
     }
@@ -262,10 +256,10 @@ class RtmpDemo
                                 /** 如果是flv的链接 就设置为http的协议 */
                                 if (self::$flvServerSocket && $fd == self::$flvServerSocket) {
                                     $connection->protocol = \MediaServer\Http\ExtHttpProtocol::class;
-                                    /** 支持http的flv播放 这个onMessage事件在创建flv服务器的时候被定义过 */
-                                    $connection->onMessage = $this->onMessage;
-                                    /** 支持ws的flv播放 这个也是在创建flv服务器的时候被定义过 */
-                                    $connection->onWebSocketConnect = $this->onWebSocketConnect;
+                                    /** 支持http的flv播放 onMessage事件处理请求数据 */
+                                    $connection->onMessage = [new HttpWMServer(), 'onHttpRequest'];
+                                    /** 支持ws的flv播放 onWebSocketConnect事件处理请求数据 */
+                                    $connection->onWebSocketConnect = [new HttpWMServer(), 'onWebsocketRequest'];;
                                 }
                                 /** web服务器使用http协议 */
                                 if (self::$webServerSocket && $fd == self::$webServerSocket) {
