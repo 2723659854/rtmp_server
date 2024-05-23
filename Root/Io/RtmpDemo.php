@@ -253,21 +253,24 @@ class RtmpDemo
                                 $connection = new TcpConnection($clientSocket, $remote_address);
                                 /** 通信协议 */
                                 $connection->transport = $this->transport;
-                                /** 如果是flv的链接 就设置为http的协议 */
+                                /** 如果是flv的链接 就设置为http的协议 flv是长链接 */
                                 if (self::$flvServerSocket && $fd == self::$flvServerSocket) {
                                     $connection->protocol = \MediaServer\Http\ExtHttpProtocol::class;
-                                    /** 支持http的flv播放 onMessage事件处理请求数据 */
+                                    /** 支持http的flv播放 onMessage事件处理请求数据，使用ExtHttp协议处理数据， */
                                     $connection->onMessage = [new HttpWMServer(), 'onHttpRequest'];
-                                    /** 支持ws的flv播放 onWebSocketConnect事件处理请求数据 */
-                                    $connection->onWebSocketConnect = [new HttpWMServer(), 'onWebsocketRequest'];;
+                                    /** 支持ws的flv播放 onWebSocketConnect事件处理请求数据 ，如果是ws链接，
+                                     * ExtHttpProtocol协议自动切换为ws链接，然后在握手后调用ws链接事件，添加播放设备，返回握手信息 ，
+                                     * 后续媒体MediaServer使用ws链接返回媒体数据给链接
+                                     */
+                                    $connection->onWebSocketConnect = [new HttpWMServer(), 'onWebsocketRequest'];
                                 }
-                                /** web服务器使用http协议 */
+                                /** web服务器使用http协议 hls是短连接*/
                                 if (self::$webServerSocket && $fd == self::$webServerSocket) {
                                     $connection->protocol = Http::class;
                                 }
                                 /** 处理rtmp链接的数据 */
                                 new \MediaServer\Rtmp\RtmpStream(
-                                /** 使用自定义协议处理传递过来的数据 */
+                                /** 使用自定义协议处理传递过来的数据 rtmp是长链接 */
                                     new \MediaServer\Utils\WMBufferStream($connection)
                                 );
                             } catch (\Exception|\RuntimeException $exception) {
