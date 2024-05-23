@@ -39,11 +39,17 @@ class RtmpStream extends EventEmitter implements DuplexMediaStreamInterface, Ver
      */
     public int $handshakeState;
 
-    public $id;
+    /**
+     * 资源id
+     * @var string|false $id
+     */
+    public string|false $id;
 
-    public $ip;
-
-    public $port;
+    /**
+     * IP
+     * @var string $ip
+     */
+    public string $ip;
 
     /** 分包头部长度 */
     protected int $chunkHeaderLen = 0;
@@ -72,24 +78,30 @@ class RtmpStream extends EventEmitter implements DuplexMediaStreamInterface, Ver
      */
     protected $currentPacket;
 
-
+    /** 开始时间戳 */
     public $startTimestamp;
 
+    /** 编码方式 */
     public $objectEncoding;
 
+    /** 流 */
     public $streams = 0;
 
+    /** 播放流id */
     public $playStreamId = 0;
+    /** 播放路径 */
     public $playStreamPath = '';
+    /** 播放参数 */
     public $playArgs = [];
-
+    /** 是否开始 */
     public $isStarting = false;
-
+    /** 链接命令 */
     public $connectCmdObj = null;
-
+    /** 应用名称 */
     public $appName = '';
-
+    /** 是否接收音频帧 */
     public $isReceiveAudio = true;
+    /** 是否接收视频帧 */
     public $isReceiveVideo = true;
 
 
@@ -130,56 +142,89 @@ class RtmpStream extends EventEmitter implements DuplexMediaStreamInterface, Ver
      */
     protected $inLastAck = 0;
 
+    /** 是否是元数据 */
     public $isMetaData = false;
     /**
+     * 元数据  配置信息
      * @var MetaDataFrame
      */
     public $metaDataFrame;
 
-
+    /** 视频宽度 */
     public $videoWidth = 0;
+    /** 视频高度 */
     public $videoHeight = 0;
+    /** 视频帧率 */
     public $videoFps = 0;
+    /** 当前帧 */
     public $videoCount = 0;
+    /** 视频帧率计算器  每一秒多少张画面 */
     public $videoFpsCountTimer;
+    /** 配置文件定义了编码的功能和特性 */
     public $videoProfileName = '';
+    /** 视频编码等级 ，涉及分辨率，质量 */
     public $videoLevel = 0;
-
+    /** 视频解码器 */
     public $videoCodec = 0;
+    /** 视频解码器名称 */
     public $videoCodecName = '';
+    /** 是否视频avc序列 */
     public $isAVCSequence = false;
     /**
+     * 视频avc序列包
      * @var VideoFrame
      */
     public $avcSequenceHeaderFrame;
 
+    /** 音频解码器 */
     public $audioCodec = 0;
+    /** 音频解码器名称 */
     public $audioCodecName = '';
+    /** 音频采样率 */
     public $audioSamplerate = 0;
+    /** 音频声道1 */
     public $audioChannels = 1;
+    /** 是否音频序列 */
     public $isAACSequence = false;
     /**
      * 音频aac 序列包
      * @var AudioFrame
      */
     public $aacSequenceHeaderFrame;
+    /** 配置文件定义了编码的功能和特性 */
     public $audioProfileName = '';
 
+    /** 是否在推流状态 */
     public $isPublishing = false;
+    /** 是否在播放中 */
     public $isPlaying = false;
 
+    /** 连续帧，就是是否一次清空队列，把队列里面的数据一次性全部发给客户端 */
     public $enableGop = true;
 
     /**
+     * 数据队列 里面存放了 avc 和aac 和 metaData，先进先出的原则，实现原理是foreach
      * @var MediaFrame[]
      */
     public $gopCacheQueue = [];
 
 
     /**
+     * 数据暂存区
      * @var WMBufferStream
      */
     protected $buffer;
+
+    /** 定时器 */
+    public $dataCountTimer;
+    /** 已传递的帧数 */
+    public $frameCount = 0;
+    /** 传输帧数的时间 */
+    public $frameTimeCount = 0;
+    /** 已读字节数 */
+    public $bytesRead = 0;
+    /** 比特率 = 已读数据/耗时 */
+    public $bytesReadRate = 0;
 
     /**
      * 初始化流媒体
@@ -205,17 +250,6 @@ class RtmpStream extends EventEmitter implements DuplexMediaStreamInterface, Ver
         /** 绑定关闭事件 */
         $bufferStream->on('onClose',[$this,'onStreamClose']);
     }
-
-    /** 定时器 */
-    public $dataCountTimer;
-    /** 已传递的帧数 */
-    public $frameCount = 0;
-    /** 传输帧数的时间 */
-    public $frameTimeCount = 0;
-    /** 已读字节数 */
-    public $bytesRead = 0;
-    /** 比特率 = 已读数据/耗时 */
-    public $bytesReadRate = 0;
 
     /**
      * 接收到数据

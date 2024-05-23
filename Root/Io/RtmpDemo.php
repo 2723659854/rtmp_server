@@ -9,6 +9,7 @@ use Root\rtmp\TcpConnection;
 /**
  * @purpose 使用了select的IO多路复用模型
  * @note 也可以使用epoll模型，但是windows目前不支持。为了兼容windows和Linux系统，所以选择select模型。
+ * @comment 代码必须写注释，不然时间长了，自己也看不懂了
  */
 class RtmpDemo
 {
@@ -53,6 +54,9 @@ class RtmpDemo
 
     /** @var resource $webServerSocket web服务器 */
     private static $webServerSocket = null;
+
+    /** @var resource $rtmpServerSocket rtmp服务器 */
+    private static $rtmpServerSocket = null;
 
     /** @var string $transport 默认通信传输协议 */
     private string $transport = 'tcp';
@@ -137,7 +141,7 @@ class RtmpDemo
      */
     private function createRtmpServer(): void
     {
-        $this->createServer($this->rtmpPort);
+        self::$rtmpServerSocket = $this->createServer($this->rtmpPort);
         logger()->info("rtmp服务：rtmp://{$this->host}:{$this->rtmpPort}/{AppName}/{ChannelName}");
     }
 
@@ -264,11 +268,11 @@ class RtmpDemo
                                     /** 绑定消息处理回调函数 */
                                     $connection->onMessage = [new Http(),'onHlsMessage'];
                                 }
-                                /** rtmp使用WMBufferStream协议 */
-                                new \MediaServer\Rtmp\RtmpStream(
-                                /** 使用自定义协议处理传递过来的数据 rtmp是长链接 */
-                                    new \MediaServer\Utils\WMBufferStream($connection)
-                                );
+                                /** rtmp 服务 长链接 协议直接处理了数据，不会触发onMessage事件，无需设置onMessage */
+                                if (self::$rtmpServerSocket && $fd == self::$rtmpServerSocket){
+                                    /** 绑定协议类型为WMBufferStream */
+                                    $connection->protocol = new \MediaServer\Utils\WMBufferStream($connection);
+                                }
                             } catch (\Exception|\RuntimeException $exception) {
                                 logger()->error($exception->getMessage());
                             }

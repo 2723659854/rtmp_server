@@ -4,9 +4,7 @@ namespace MediaServer\Utils;
 
 use Evenement\EventEmitterInterface;
 use Evenement\EventEmitterTrait;
-use Root\Protocols\Http;
-use Root\Request;
-use Root\Response;
+use MediaServer\Rtmp\RtmpStream;
 use Root\rtmp\TcpConnection;
 
 /**
@@ -17,37 +15,45 @@ class WMBufferStream implements EventEmitterInterface
 {
     use EventEmitterTrait;
 
+    /** 暂存区索引 */
     private $_index = 0;
+    /** 暂存区 */
     public $_data = '';
 
     /**
-     * @var TcpConnection
+     * @var ?TcpConnection
      */
-    public $connection;
+    public ?TcpConnection $connection;
 
     /**
-     * WMStreamProtocol constructor.
-     * @param $connection TcpConnection
+     * 初始化
+     * @param TcpConnection $connection
      */
-    public function __construct($connection)
+    public function __construct(TcpConnection $connection)
     {
+        /** 保存链接，并设定链接的异常处理回调，关闭链接回调 */
         $this->connection = $connection;
-        /** 当tcp数据传输进来之后，在这里更换为当前的wmbuffer协议，然后connection对象读取数据的时候会使用本协议的input方法 是tcpConnection.php 的 baseRead 方法调用的 */
-        /** 就不更改协议了，默认的rtmp必须使用本协议 */
-        if (!$this->connection->protocol) {
-            $this->connection->protocol = $this;
-        }
-
         $this->connection->onClose = [$this, '_onClose'];
         $this->connection->onError = [$this, '_onError'];
+        /** 初始化链接，并绑定数据处理，异常，错误事件 */
+        new RtmpStream($this);
     }
 
-    /*    public function __destruct(){
-            logger()->info("WMBufferStream destruct");
-        }*/
+    /**
+     * 链接关闭
+     */
+    public function __destruct()
+    {
+        logger()->info("WMBufferStream destruct");
+    }
 
 
-
+    /**
+     * 关闭链接
+     * @param $con
+     * @return void
+     * @comment 触发关闭事件，并移除所有监听
+     */
     public function _onClose($con)
     {
         $this->connection->protocol = null;
@@ -56,6 +62,13 @@ class WMBufferStream implements EventEmitterInterface
         $this->removeAllListeners();
     }
 
+    /**
+     * 发生异常
+     * @param $con
+     * @param $code
+     * @param $msg
+     * @return void
+     */
     public function _onError($con, $code, $msg)
     {
         $this->emit("onError");
@@ -77,7 +90,7 @@ class WMBufferStream implements EventEmitterInterface
         /** 接收数据 */
         //reset recv buffer
         $me->recvBuffer($buffer);
-        /** 触发onData函数 ，前面RtmpStream.php 在初始化的时候已经绑定了这个事件 */
+        /** 触发onData函数  */
         $me->emit("onData", [$me]);
         // clear connection recv buffer
         $me->clearConnectionRecvBuffer();
