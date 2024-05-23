@@ -16,6 +16,9 @@ use Root\Request;
 use Root\Response;
 use Root\Protocols\Websocket;
 
+/**
+ * @purpose flv服务
+ */
 class HttpWMServer
 {
     static $publicPath = '';
