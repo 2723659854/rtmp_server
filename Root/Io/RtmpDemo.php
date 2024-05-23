@@ -10,32 +10,32 @@ use Root\rtmp\TcpConnection;
  */
 class RtmpDemo
 {
-    /** 设置接收http数据的回调 */
+    /** @var callable $onMessage 设置接收http数据的回调 */
     public $onMessage = NULL;
 
-    /** 设置接收ws数据的回调 */
-    public $onWebSocketConnect = null;
+    /** @var callable $onWebSocketConnect 设置接收ws数据的回调 */
+    public  $onWebSocketConnect = null;
 
-    /** 存放所有socket 注意内存泄漏 */
-    public static $allSocket;
+    /** @var array $allSocket 存放所有socket 注意内存泄漏 */
+    public static array $allSocket;
 
     /** @var string $host 监听的ip */
-    private $host = '0.0.0.0';
+    private string $host = '0.0.0.0';
 
     /** @var string $port RTMP监听的端口 可修改 */
-    public $rtmpPort = '1935';
+    public string $rtmpPort = '1935';
 
     /** @var string $flvPort flv监听端口 可修改 */
-    public $flvPort = '8501';
+    public string $flvPort = '8501';
 
     /** @var string $webPort web端口 */
-    public $webPort = '80';
+    public string $webPort = '80';
 
     /** @var string $protocol 通信协议 */
-    private $protocol = 'tcp';
+    private string $protocol = 'tcp';
 
-    /** rtmp服务器实例 */
-    public static $instance = null;
+    /** @var ?RtmpDemo $instance rtmp服务器实例 */
+    public static ?RtmpDemo $instance = null;
 
     /**
      * 读事件
@@ -58,14 +58,14 @@ class RtmpDemo
     /** 写事件 */
     private array $_writeFds = [];
 
-    /** flv服務端 */
+    /** @var resource $flvServerSocket flv服務端 */
     private static $flvServerSocket = null;
 
-    /** web服务器 */
-    private static $webServerSocket = null;
+    /** @var resource $webServerSocket web服务器 */
+    private static  $webServerSocket = null;
 
     /** @var string $transport 默认通信传输协议 */
-    public $transport = 'tcp';
+    public string $transport = 'tcp';
 
     /** 服务端socket */
     private array $serverSocket = [];
@@ -85,7 +85,7 @@ class RtmpDemo
      * @param array $func 回调函数
      * @return bool
      */
-    public function add($fd, $flag, $func)
+    public function add($fd, int $flag, array $func): bool
     {
         switch ($flag) {
             case self::EV_READ:
@@ -115,7 +115,7 @@ class RtmpDemo
      * @param int $flag 事件类型
      * @return bool
      */
-    public function del($fd, $flag)
+    public function del($fd, int $flag): bool
     {
         $fd_key = (int)$fd;
         switch ($flag) {
@@ -140,27 +140,32 @@ class RtmpDemo
      * 创建flv播放服务
      * @return void
      */
-    public function createFlvSever()
+    public function createFlvSever(): void
     {
         /** 保存flv服务端的socket */
         self::$flvServerSocket = $this->createServer($this->flvPort);
+        new \MediaServer\Http\HttpWMServer($this);
+        logger()->info("flv服务：http://{$this->host}:{$this->flvPort}/{AppName}/{ChannelName}.flv");
+        logger()->info("flv服务：ws://{$this->host}:{$this->flvPort}/{AppName}/{ChannelName}.flv");
     }
 
     /**
      * 创建rtmp服务
      */
-    private function createRtmpServer()
+    private function createRtmpServer(): void
     {
         $this->createServer($this->rtmpPort);
+        logger()->info("rtmp服务：rtmp://{$this->host}:{$this->rtmpPort}/{AppName}/{ChannelName}");
     }
 
     /**
      * 创建web服务器
      * @return void
      */
-    private function createWebServer()
+    private function createHlsServer(): void
     {
         self::$webServerSocket = $this->createServer($this->webPort);
+        logger()->info("hls服务：http://{$this->host}:{$this->webPort}/{AppName}/{ChannelName}.m3u8");
     }
 
     /**
@@ -170,9 +175,8 @@ class RtmpDemo
      */
     private function createServer(string $port)
     {
-        /** @var string $listeningAddress 拼接监听地址 */
+        /**  拼接监听地址 */
         $listeningAddress = $this->protocol . '://' . $this->host . ':' . $port;
-        echo "开始监听{$listeningAddress}\r\n";
         /** 不验证https证书 */
         $contextOptions['ssl'] = ['verify_peer' => false, 'verify_peer_name' => false];
         /** 配置socket流参数 */
@@ -197,7 +201,7 @@ class RtmpDemo
      * 获取实例
      * @return self|null
      */
-    public static function instance()
+    public static function instance(): ?RtmpDemo
     {
         if (!self::$instance) {
             self::$instance = new self();
@@ -208,33 +212,22 @@ class RtmpDemo
     /**
      * 启动服务
      */
-    public function start()
+    public function start(): void
     {
         /** 开启rtmp 服务 */
         $this->createRtmpServer();
-        /** 启动flv服务 */
-        $this->startFlv();
-        /** 创建web服务器 */
-        $this->createWebServer();
+        /** 创建flv服务器 */
+        $this->createFlvSever();
+        /** 创建hls服务器 */
+        $this->createHlsServer();
         /** 开始接收客户端请求 */
         $this->accept();
     }
 
     /**
-     * 启动flv服务
-     * @return void
-     * @comment 就是再添加一个监听地址
-     */
-    private function startFlv()
-    {
-        new \MediaServer\Http\HttpWMServer($this);
-    }
-
-
-    /**
      * 接受客户端的链接，并处理数据
      */
-    private function accept()
+    private function accept(): void
     {
         /** 创建多个子进程阻塞接收服务端socket 这个while死循环 会导致for循环被阻塞，不往下执行，创建了子进程也没有用，直接在第一个子进程哪里阻塞了 */
         while (true) {
@@ -309,6 +302,7 @@ class RtmpDemo
             if ($write) {
                 foreach ($write as $fd) {
                     $fd_key = (int)$fd;
+                    /** 调用预定义的可写回调函数 */
                     if (isset($this->_allEvents[$fd_key][self::EV_WRITE])) {
                         \call_user_func_array(
                             $this->_allEvents[$fd_key][self::EV_WRITE][0],

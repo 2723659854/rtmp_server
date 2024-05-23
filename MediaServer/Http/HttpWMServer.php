@@ -22,8 +22,6 @@ class HttpWMServer
 
     public function __construct(RtmpDemo $server = null)
     {
-        /** 创建flv服务器 */
-        $server->createFlvSever();
         /** 绑定ws请求响应事件 */
         $server->onWebSocketConnect = [$this, 'onWebsocketRequest'];
         /** 绑定http请求事件 */
