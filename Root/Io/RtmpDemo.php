@@ -7,6 +7,7 @@ use Root\rtmp\TcpConnection;
 
 /**
  * @purpose 使用了select的IO多路复用模型
+ * @note 也可以使用epoll模型，但是windows目前不支持。为了兼容windows和Linux系统，所以选择select模型。
  */
 class RtmpDemo
 {
@@ -37,25 +38,19 @@ class RtmpDemo
     /** @var ?RtmpDemo $instance rtmp服务器实例 */
     public static ?RtmpDemo $instance = null;
 
-    /**
-     * 读事件
-     * @var int
-     */
-    const EV_READ = 1;
+    /** @var int 读事件 */
+    const  EV_READ = 1;
 
-    /**
-     * 写事件
-     * @var int
-     */
+    /** @var int 写事件 */
     const EV_WRITE = 2;
 
-    /** 所有的事件 */
+    /** @var array $_allEvents 所有的事件 */
     private array $_allEvents = [];
 
-    /** 读事件 */
+    /** @var array $_readFds 读事件 */
     private array $_readFds = [];
 
-    /** 写事件 */
+    /** @var array $_writeFds 写事件 */
     private array $_writeFds = [];
 
     /** @var resource $flvServerSocket flv服務端 */
@@ -67,7 +62,7 @@ class RtmpDemo
     /** @var string $transport 默认通信传输协议 */
     public string $transport = 'tcp';
 
-    /** 服务端socket */
+    /** @var array $serverSocket 服务端socket */
     private array $serverSocket = [];
 
     /**
@@ -92,9 +87,10 @@ class RtmpDemo
             case self::EV_WRITE:
                 $count = $flag === self::EV_READ ? \count($this->_readFds) : \count($this->_writeFds);
                 if ($count >= 1024) {
-                    echo "系统最大支持1024个链接\n";
+                    /** 可以修改默认值并重新编译php ，突破1024的上限，不过作为直播，当达到1024个链接的时候，应该考虑CDN了。 */
+                    logger()->warning("系统最大支持1024个链接");
                 } else if (\DIRECTORY_SEPARATOR !== '/' && $count >= 256) {
-                    echo "系统调用选择超出了最大连接数256\n";
+                    logger()->warning("系统调用选择超出了最大连接数256");
                 }
                 $fd_key = (int)$fd;
                 $this->_allEvents[$fd_key][$flag] = array($func, $fd);
