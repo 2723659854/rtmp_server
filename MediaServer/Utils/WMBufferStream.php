@@ -37,10 +37,7 @@ class WMBufferStream implements EventEmitterInterface
         if (!$this->connection->protocol) {
             $this->connection->protocol = $this;
         }
-        /** 如果协议类型是hls 那么就需要处理hls数据 */
-        if ($this->connection->protocol == Http::class) {
-            $this->connection->onMessage = [$this, 'onHlsMessage'];
-        }
+
         $this->connection->onClose = [$this, '_onClose'];
         $this->connection->onError = [$this, '_onError'];
     }
@@ -49,53 +46,7 @@ class WMBufferStream implements EventEmitterInterface
             logger()->info("WMBufferStream destruct");
         }*/
 
-    /**
-     * 处理hls协议
-     * @param $connection
-     * @param Request $request
-     */
-    public function onHlsMessage($connection, Request $request)
-    {
-        /** web服务头部设置 */
-        $headerType = [
-            'html' => 'text/html; charset=UTF-8',
-            'js' => 'text/javascript; charset=UTF-8',
-            'css' => 'text/css; charset=UTF-8',
-            'ico' => 'image/jpeg; charset=UTF-8',
-            'm3u8' => 'application/vnd.apple.mpegurl',
-            'ts' => 'video/mp2t',
-        ];
-        /** 获取文件的路径 */
-        $path = $request->path();
-        /** web服务在docker环境无法正常返回静态文件 */
-        $webExtension = ['html', 'ico', 'css', 'js',];
-        $flvExtension = ['m3u8', 'ts'];
-        $requestFileExtension = pathinfo($path, PATHINFO_EXTENSION);
-        if (!in_array($requestFileExtension, array_merge($flvExtension, $webExtension))) {
-            /** 返回404 */
-            $connection->send(new Response(404, ['Access-Control-Allow-Origin' => '*'], 'not found'));
-        }
-        /** 拼接文件路径 */
-        $file = dirname(dirname(__DIR__)) .  DIRECTORY_SEPARATOR . $path;
-        if (!is_file($file)) {
-            /** 返回404 */
-            $connection->send(new Response(404, ['Access-Control-Allow-Origin' => '*'], 'not found'));
-        }
-        /** 允许跨域 */
-        $header = [
-            'Access-Control-Allow-Origin' => '*',
-        ];
-        if (in_array($requestFileExtension,  array_merge($flvExtension, $webExtension))) {
-            $content = file_get_contents($file);
-            $header ['Content-Type'] = $headerType[$requestFileExtension];
-            $header ['Content-Length'] = strlen($content);
-            $response = new Response(200, $header, $content);
-            $connection->send($response);
-        } else {
-            /** 返回404 */
-            $connection->send(new Response(404, ['Access-Control-Allow-Origin' => '*'], 'not found'));
-        }
-    }
+
 
     public function _onClose($con)
     {

@@ -239,7 +239,7 @@ class RtmpDemo
                     if (in_array($fd, $this->serverSocket)) {
                         /** 读取服务端接收到的 消息，这个消息的内容是客户端连接 ，stream_socket_accept方法负责接收客户端连接 */
                         $clientSocket = stream_socket_accept($fd, 0, $remote_address); //阻塞监听 设置超时0，并获取客户端地址
-                        /** 如果这个客户端连接不为空 */
+                        /** 如果这个客户端连接不为空 给链接绑定可读事件，绑定协议类型，而不同的协议绑定了不同的数据处理方式 */
                         if (!empty($clientSocket)) {
                             try {
                                 /** 使用tcp解码器 */
@@ -259,7 +259,10 @@ class RtmpDemo
                                 }
                                 /** web服务器使用http协议 hls是短连接*/
                                 if (self::$webServerSocket && $fd == self::$webServerSocket) {
+                                    /** 更换协议为http */
                                     $connection->protocol = Http::class;
+                                    /** 绑定消息处理回调函数 */
+                                    $connection->onMessage = [new Http(),'onHlsMessage'];
                                 }
                                 /** 处理rtmp链接的数据 */
                                 new \MediaServer\Rtmp\RtmpStream(
