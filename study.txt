@@ -65,4 +65,10 @@ rtmp 和 flv发送的都是音频帧AudioFrame和视频帧VideoFrame，
 当关闭推流的时候，打完最后一个ts包，在索引文件最后打上结束标志，并保存；
 https://blog.csdn.net/qq_35044535/article/details/77838282
 ts 是直接把aac和avc 加上header然后写入的，可以使用phpbg/mpegts这个包写入数据。
+https://www.cnblogs.com/kuliuheng/p/7127770.html
 ======================================================================
+ts 流分析工具 好像没什么卵用，不能用来打开ts文件
+https://www.tsreader.com/legacydownloads/index.html
+======================================================================================
+Transport Stream
+ts文件简称
