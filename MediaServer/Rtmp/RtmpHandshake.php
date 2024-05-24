@@ -4,7 +4,7 @@
 namespace MediaServer\Rtmp;
 
 /**
- * 服务端生成握手的s0s1s2的方法
+ * @purpose 服务端生成握手的s0s1s2的方法
  */
 class RtmpHandshake
 {
@@ -39,7 +39,7 @@ class RtmpHandshake
     /**
      * s1生成
      * @return false|string
-     * @note 时间戳，0，1528个随机字符
+     * @note 4个时间戳，4个0，1528个随机字符
      */
     static function handshakeGenerateS1()
     {
@@ -62,6 +62,7 @@ class RtmpHandshake
      */
     static function handshakeGenerateS2($c1)
     {
+        /** c1解码 */
         $c1Data = unpack('Ntimestamp/Nzero/a1528random', $c1);
         $s2 = pack('NNa1528',
             $c1Data['timestamp'],

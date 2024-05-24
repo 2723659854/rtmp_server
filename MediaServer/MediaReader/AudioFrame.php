@@ -11,7 +11,7 @@ use MediaServer\Utils\BinaryStream;
 class AudioFrame extends BinaryStream implements MediaFrame
 {
     public $FRAME_TYPE=self::AUDIO_FRAME;
-
+    /** 音频编码格式 */
     const AUDIO_CODEC_NAME = [
         '',
         'ADPCM',
@@ -32,17 +32,23 @@ class AudioFrame extends BinaryStream implements MediaFrame
         'Uncompressed'
     ];
 
+    /** 码率 */
     const AUDIO_SOUND_RATE = [
         5512, 11025, 22050, 44100
     ];
 
-
+    /** 默认的aac编码 */
     const SOUND_FORMAT_AAC = 10;
 
+    /** 编码格式 */
     public $soundFormat;
+    /** 采样率 */
     public $soundRate;
+    /** 大小 */
     public $soundSize;
+    /** 类型 */
     public $soundType;
+    /** 时间戳 */
     public $timestamp = 0;
 
 

@@ -6,6 +6,10 @@ namespace MediaServer\MediaReader;
 
 use MediaServer\Utils\BinaryStream;
 
+/**
+ * @purpose 视频帧
+ * @note 一个视频帧包含一个avc,同理，一个音频帧包含一个aac
+ */
 class VideoFrame extends BinaryStream implements MediaFrame
 {
     public $FRAME_TYPE=self::VIDEO_FRAME;
@@ -76,16 +80,19 @@ class VideoFrame extends BinaryStream implements MediaFrame
     /** 初始化视频编码格式 */
     public function __construct($data, $timestamp = 0)
     {
+        /** 装载数据 方便对数据的读取 */
         parent::__construct($data);
 
         $this->timestamp = $timestamp;
         $firstByte = $this->readTinyInt();
+        /** 类型和编码都是使用掩码计算的 */
         $this->frameType = $firstByte >> 4;
         $this->codecId = $firstByte & 15;
     }
 
 
     /**
+     * 视频数据包
      * @var AVCPacket
      */
     protected $avcPacket;
@@ -103,6 +110,10 @@ class VideoFrame extends BinaryStream implements MediaFrame
         return $this->avcPacket;
     }
 
+    /**
+     * 销毁数据包
+     * @return void
+     */
     public function destroy(){
         $this->avcPacket=null;
     }

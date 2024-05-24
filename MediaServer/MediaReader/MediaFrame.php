@@ -5,6 +5,7 @@ namespace MediaServer\MediaReader;
 
 
 /**
+ * @purpose 元数据帧接口
  * Interface MediaFrame
  * @package MediaServer\MediaReader
  * @property $FRAME_TYPE

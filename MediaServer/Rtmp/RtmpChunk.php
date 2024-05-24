@@ -43,11 +43,17 @@ class RtmpChunk
     /**
      * 默认分包类型
      * chunk type default chunk stream id
+     * 发送的所有数据都有chunkStreamId 区分消息类型
      */
+    /** 协议通道 */
     const CHANNEL_PROTOCOL = 2;
+    /** 命令消息通道 */
     const CHANNEL_INVOKE = 3;
+    /** 音频通道 */
     const CHANNEL_AUDIO = 4;
+    /** 视频通道 */
     const CHANNEL_VIDEO = 5;
+    /** 数据通道 */
     const CHANNEL_DATA = 6;
 
 

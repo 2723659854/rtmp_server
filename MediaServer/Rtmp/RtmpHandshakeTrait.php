@@ -7,6 +7,7 @@ namespace MediaServer\Rtmp;
 use MediaServer\Utils\BinaryStream;
 
 /**
+ * @purpose 握手服务
  * Trait RtmpHandshakeTrait
  * @package MediaServer\Rtmp
  */

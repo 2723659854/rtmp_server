@@ -52,17 +52,22 @@ class RtmpAMF
 
 
     /**
+     * 讀取rtmp的命令
      * @param $payload
      * @return null[]
      * @throws \Exception
      */
     static function rtmpCMDAmf0Reader($payload)
     {
+        /** 加載數據 */
         $stream = new \SabreAMF_InputStream($payload);
+        /** 解码 */
         $deserializer = new \SabreAMF_AMF0_Deserializer($stream);
+        /** 初始化命令 */
         $result = [
             'cmd' => null,
         ];
+        /** 解码操作数据 */
         if ($cmd = @$deserializer->readAMFData()) {
             $result['cmd'] = $cmd;
             if (isset(self::RTMP_CMD_CODE[$cmd])) {
@@ -84,18 +89,22 @@ class RtmpAMF
 
 
     /**
+     * 解码amf操作消息包载荷
      * @param $payload
      * @return null[]
      * @throws \Exception
      */
     static function rtmpDataAmf0Reader($payload)
     {
-
+        /** 加载数据 */
         $stream = new \SabreAMF_InputStream($payload);
+        /** 解码数据 */
         $deserializer = new \SabreAMF_AMF0_Deserializer($stream);
+        /** 初始化 */
         $result = [
             'cmd' => null,
         ];
+        /** 读取数据 */
         if ($cmd = @$deserializer->readAMFData()) {
             $result['cmd'] = $cmd;
             if (isset(self::RTMP_DATA_CODE[$cmd])) {
@@ -115,6 +124,7 @@ class RtmpAMF
     }
 
     /**
+     * afm操作消息编码
      * Encode AMF0 Command
      * @param $opt
      * @throws \Exception
@@ -122,9 +132,11 @@ class RtmpAMF
      */
     static function rtmpCMDAmf0Creator($opt)
     {
-
+        /** 初始化 */
         $outputStream = new \SabreAMF_OutputStream();
+        /** 序列化 */
         $serializer = new \SabreAMF_AMF0_Serializer($outputStream);
+        /** 写入命令 */
         $serializer->writeAMFData($opt['cmd']);
         if (isset(self::RTMP_CMD_CODE[$opt['cmd']])) {
             foreach (self::RTMP_CMD_CODE[$opt['cmd']] as $k) {
@@ -142,8 +154,7 @@ class RtmpAMF
     }
 
     /**
-     * 解析amf 命令
-     * 人都麻了，这么多代码
+     * 写入amf消息载荷，并编码
      * Encode AMF0 Command
      * @param $opt
      * @throws \Exception
@@ -151,9 +162,11 @@ class RtmpAMF
      */
     static function rtmpDATAAmf0Creator($opt)
     {
-
+        /** 初始化 */
         $outputStream = new \SabreAMF_OutputStream();
+        /** 序列化 */
         $serializer = new \SabreAMF_AMF0_Serializer($outputStream);
+        /** 写入数据 */
         $serializer->writeAMFData($opt['cmd']);
         if (isset(self::RTMP_DATA_CODE[$opt['cmd']])) {
             foreach (self::RTMP_DATA_CODE[$opt['cmd']] as $k) {

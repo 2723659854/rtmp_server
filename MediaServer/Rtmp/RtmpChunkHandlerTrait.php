@@ -18,7 +18,8 @@ trait RtmpChunkHandlerTrait
      * 数据分包
      * @note 记录一下，websocket协议传输数据用掩码，是为了防止链路层抓包数据。链路层完成从 IP 地址到 MAC 地址的转换。ARP 请求以广播形式发送，网络上的主机可以自主发送 ARP 应答消息，
      * @note 网络层级：https://blog.csdn.net/qq_31347869/article/details/107433744
-     * @note 这里rtmp也用了掩码
+     * @note 这里rtmp也用了掩码，
+     * hls协议封装ts数据，全是掩码，将数据封装了三层，我尼玛，老火
      */
     public function onChunkData()
     {
@@ -144,36 +145,46 @@ trait RtmpChunkHandlerTrait
 
 
     /**
-     * @param $packet
+     * rtmp数据包切片处理
+     * @param RtmpPacket $packet rtmp需要传输的数据
      * @return string
      */
     public function rtmpChunksCreate(&$packet)
     {
+        /** 生成切片header */
         $baseHeader = $this->rtmpChunkBasicHeaderCreate($packet->chunkType, $packet->chunkStreamId);
+        /** 标记为微型数据包 */
         $baseHeader3 = $this->rtmpChunkBasicHeaderCreate(RtmpChunk::CHUNK_TYPE_3, $packet->chunkStreamId);
-
+        /** 创建header的msg部分载荷 */
         $msgHeader = $this->rtmpChunkMessageHeaderCreate($packet);
-
+        /** 是否启用扩展时间戳  = 包的时间戳 >= 16777215 时间戳用来表示发送时时间 ，对端用来进行对包的排序，校验，合并流，计算延迟 */
         $useExtendedTimestamp = $packet->timestamp >= RtmpPacket::MAX_TIMESTAMP;
-
+        /** 将时间戳编码成二进制 */
         $timestampBin = pack('N', $packet->timestamp);
+        /** 组装header */
         $out = $baseHeader . $msgHeader;
         if ($useExtendedTimestamp) {
             $out .= $timestampBin;
         }
-
+        /** 初始化读取指针 */
         //读取payload
         $readOffset = 0;
+        /** 每一个切片的长度 */
         $chunkSize = $this->outChunkSize;
         while ($remain = $packet->length - $readOffset) {
-
+            /** 比较剩余长度 和 切片长度  取最小值 */
             $size = min($remain, $chunkSize);
             //logger()->debug("rtmpChunksCreate remain {$remain} size {$size}");
+            /** 读取size长度的内容，并追加到out上 */
             $out .= substr($packet->payload, $readOffset, $size);
+            /** 移动指针 */
             $readOffset += $size;
+            /** 如果还有剩余的数据 */
             if ($readOffset < $packet->length) {
+                /** 使用微型数据包header分割 */
                 //payload 还没读取完
                 $out .= $baseHeader3;
+                /** 追加扩展时间戳 */
                 if ($useExtendedTimestamp) {
                     $out .= $timestampBin;
                 }
@@ -187,9 +198,9 @@ trait RtmpChunkHandlerTrait
 
     /**
      * 创建chunk分片basic header 数据
-     * @param $fmt
-     * @param $cid
-     * @comment 从函数可以知道，basic header 包含 编码格式和分片id
+     * @param int $fmt 编码格式
+     * @param int $cid 类型 id
+     * @comment 从函数可以知道，basic header 包含 编码格式和分片类型id
      */
     public function rtmpChunkBasicHeaderCreate($fmt, $cid)
     {

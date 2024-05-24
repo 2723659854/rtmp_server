@@ -9,7 +9,7 @@ use \Exception;
 use React\Promise\PromiseInterface;
 
 /**
- * rtmp命令解析
+ * @purpose rtmp命令解析
  */
 trait RtmpInvokeHandlerTrait
 {
