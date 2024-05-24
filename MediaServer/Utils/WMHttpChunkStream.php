@@ -49,6 +49,8 @@ class WMHttpChunkStream implements  WMChunkStreamInterface
      * 发送数据
      * @param $data
      * @return void
+     * @note rtmp和flv的数据是一样的，他们的区别是：加了http的flvHeader,然后也是长链接connection:keep-alive ，每一个包有长度，
+     * 用\r\n分割数据
      */
     public function write($data)
     {
