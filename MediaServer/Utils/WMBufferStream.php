@@ -10,6 +10,7 @@ use Root\rtmp\TcpConnection;
 /**
  * 这是编写的一个协议wmbuffer协议
  * @purpose 这个是rtmp推送的字节流数据
+ * @note rtmp和flv都是用的这个协议进行转换，hls协议也可以
  */
 class WMBufferStream implements EventEmitterInterface
 {

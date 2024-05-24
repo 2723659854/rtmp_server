@@ -8,7 +8,7 @@ use Root\Protocols\Http\Chunk;
 use Root\Response;
 
 /**
- * ws的数据流
+ * @purpose  ws的数据流 切片
  */
 class WMWsChunkStream implements  WMChunkStreamInterface
 {
@@ -46,6 +46,7 @@ class WMWsChunkStream implements  WMChunkStreamInterface
      * 发送数据
      * @param $data
      * @return void
+     * @note ws本身就是长链接，不用切片
      */
     public function write($data)
     {

@@ -8,6 +8,9 @@ use Root\rtmp\TcpConnection;
 use Root\Protocols\Http\Chunk;
 use Root\Response;
 
+/**
+ * @purpose 流式数据切片
+ */
 class WMHttpChunkStream implements  WMChunkStreamInterface
 {
     use EventEmitterTrait;

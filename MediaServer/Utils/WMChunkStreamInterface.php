@@ -6,6 +6,9 @@ namespace MediaServer\Utils;
 
 use Evenement\EventEmitterInterface;
 
+/**
+ * @purpose rtmp 协议接口
+ */
 interface WMChunkStreamInterface extends  EventEmitterInterface
 {
 
