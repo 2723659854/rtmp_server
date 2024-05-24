@@ -151,6 +151,7 @@ class MediaServer
             $p_stream->removeListener('on_frame', self::class . '::publisherOnFrame');
             $p_stream->is_on_frame = false;
         }
+        //todo 给索引文件m3u8追加结束标志
     }
 
     /**
@@ -201,6 +202,7 @@ class MediaServer
                 $playStream->frameSend($frame);
             }
         }
+        //todo 生成ts数据包 将$frame数据包编码成ts包
     }
 
 
@@ -253,6 +255,7 @@ class MediaServer
 
         logger()->info(" add publisher {path}", ['path' => $path]);
 
+        //TODO 生成m3u8索引文件
         return true;
 
     }
