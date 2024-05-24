@@ -73,7 +73,7 @@ trait RtmpVideoHandlerTrait
                         $avcPack->avcPacketType === AVCPacket::AVC_PACKET_TYPE_SEQUENCE_HEADER) {
                         //skip avc sequence
                     } else {
-                        /** 获取包信息 */
+                        /** 将包投递到队列中 */
                         $this->gopCacheQueue[] = $videoFrame;
                     }
                 }
