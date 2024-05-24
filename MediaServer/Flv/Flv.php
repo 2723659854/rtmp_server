@@ -16,6 +16,7 @@ use function ord;
 
 /**
  * @purpose flv数据包
+ * @note flv数据帧
  */
 class Flv
 {

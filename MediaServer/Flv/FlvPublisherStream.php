@@ -24,76 +24,99 @@ class FlvPublisherStream extends EventEmitter implements PublishStreamInterface
     const FLV_STATE_FLV_HEADER = 0;
     const FLV_STATE_TAG_HEADER = 1;
     const FLV_STATE_TAG_DATA = 2;
-
+    /** 流id */
     public $id;
 
     /**
+     * 输入流
      * @var EventEmitter|ReadableStreamInterface
      */
     private $input;
+    /** 是否关闭 */
     private $closed = false;
 
 
     /**
+     * 暂存区
      * @var BinaryStream
      */
     protected $buffer;
 
-
+    /** 头部数据 */
     public $flvHeader;
+    /** 是否有头部数据 */
     public $hasFlvHeader = false;
-
+    /** 是否有音频 */
     public $hasAudio = false;
+    /** 是否有视频 */
     public $hasVideo = false;
-
+    /** 音频编码格式 */
     public $audioCodec = 0;
+    /** 音频编码格式名称 */
     public $audioCodecName = '';
+    /** 音频采样率 */
     public $audioSamplerate = 0;
+    /** 音频声道 默认单声道 */
     public $audioChannels = 1;
+    /** 是否音频序列 */
     public $isAACSequence = false;
 
     /**
+     * 音频帧
      * @var AudioFrame
      */
     public $aacSequenceHeaderFrame;
+    /** 音频配置 */
     public $audioProfileName = '';
 
-
+    /** 是否元数据 */
     public $isMetaData = false;
     /**
+     * 元数据帧
      * @var MetaDataFrame
      */
     public $metaDataFrame;
 
-
+    /** 是否视频序列 */
     public $isAVCSequence = false;
     /**
+     * 视频帧
      * @var VideoFrame
      */
     public $avcSequenceHeaderFrame;
+    /** 视频宽 */
     public $videoWidth = 0;
+    /** 视频高 */
     public $videoHeight = 0;
+    /** 视频fps :视频每秒传输帧数，帧数越高，越流畅，否则客户端看起来卡顿 */
     public $videoFps = 0;
+    /** 视频计数 */
     public $videoCount = 0;
+    /** fps计算器 */
     public $videoFpsCountTimer;
-
+    /** 视频配置 */
     public $videoProfileName = '';
+    /** 视频等级 */
     public $videoLevel = 0;
-
+    /** 视频编码 */
     public $videoCodec = 0;
+    /** 视频编码名称 */
     public $videoCodecName = '';
 
-
+    /** 开始推流时间戳 */
     public $startTimestamp;
 
 
     /**
+     * 推流路径
      * @var string
      */
     public $publishPath;
 
     /**
+     * flv数据流队列
      * @var MediaFrame[]
+     * @note 所有数据都放到这个队列，然后逐个推送到客户端，先进先出
      */
     public $gopCacheQueue = [];
 
@@ -122,20 +145,24 @@ class FlvPublisherStream extends EventEmitter implements PublishStreamInterface
         $input->on('error', [$this, 'onStreamError']);
         /** 绑定close事件 */
         $input->on('close', [$this, 'onStreamClose']);
+        /** 初始化暂存区 */
         $this->buffer = new BinaryStream();
     }
 
 
     /**
+     * flv标记
      * @var FlvTag
+     * @note 相当于mysql事务，先创建一个备份资源，成功就删除，是被就回滚
      */
     protected $currentTag;
 
-
+    /** 推流状态 */
     protected $steamStatus = self::FLV_STATE_FLV_HEADER;
 
 
     /**
+     * 推流业务逻辑
      * @param $data
      * @throws Exception
      * @internal
@@ -245,7 +272,7 @@ class FlvPublisherStream extends EventEmitter implements PublishStreamInterface
                 /** 元数据帧 */
                 $this->metaDataFrame = new MetaDataFrame($tag->data);
                 $this->isMetaData = true;
-                /** 触发on_frame事件  获取到帧数据 */
+                /** 触发on_frame事件  将元数据（配置信息）推流到客户端 */
                 $this->emit('on_frame', [$this->metaDataFrame, $this]);
                 break;
             case Flv::VIDEO_TAG:
@@ -299,7 +326,7 @@ class FlvPublisherStream extends EventEmitter implements PublishStreamInterface
                         }
                     }
                 }
-
+                /** 将视频帧推送到客户端 */
                 //数据处理与数据发送
                 $this->emit('on_frame', [$videoFrame, $this]);
                 //销毁AVC
@@ -341,7 +368,7 @@ class FlvPublisherStream extends EventEmitter implements PublishStreamInterface
 
 
                 }
-                /** 触发meda sever上的on_frame事件 */
+                /** 触发meda sever上的on_frame事件 将音频帧推流到客户端 */
                 $this->emit('on_frame', [$audioFrame, $this]);
                 //logger()->info("rtmpAudioHandler");
                 $audioFrame->destroy();
@@ -351,6 +378,7 @@ class FlvPublisherStream extends EventEmitter implements PublishStreamInterface
 
 
     /**
+     * 推流发生错误
      * @param Exception $e
      * @internal
      */
@@ -360,6 +388,10 @@ class FlvPublisherStream extends EventEmitter implements PublishStreamInterface
         $this->onStreamClose();
     }
 
+    /**
+     * 关闭推流
+     * @return void
+     */
     public function onStreamClose()
     {
         if ($this->closed) {
@@ -367,65 +399,111 @@ class FlvPublisherStream extends EventEmitter implements PublishStreamInterface
         }
 
         $this->closed = true;
-
+        /** 清空暂存区数据 */
         $this->buffer = null;
+        /** 清空队列 */
         $this->gopCacheQueue = [];
+        /** 关闭链接 */
         $this->input->close();
         $this->emit('on_close');
+        /** 移除所有监听事件 */
         $this->removeAllListeners();
     }
 
+    /**
+     * 获取推流路径
+     * @return string
+     */
     public function getPublishPath()
     {
         return $this->publishPath;
     }
 
+    /**
+     * 是否元数据
+     * @return bool|mixed
+     */
     public function isMetaData()
     {
         return $this->isMetaData;
     }
 
-
+    /**
+     * 获取元数据帧
+     * @return MetaDataFrame
+     */
     public function getMetaDataFrame()
     {
         return $this->metaDataFrame;
     }
 
+    /**
+     * 是否aac序列帧
+     * @return bool|mixed
+     */
     public function isAACSequence()
     {
         return $this->isAACSequence;
     }
 
+    /**
+     * 获取aac序列帧
+     * @return AudioFrame
+     */
     public function getAACSequenceFrame()
     {
         return $this->aacSequenceHeaderFrame;
     }
 
+    /**
+     * 是否avc序列
+     * @return bool|mixed
+     */
     public function isAVCSequence()
     {
         return $this->isAVCSequence;
     }
 
+    /**
+     * 获取avc序列帧
+     * @return VideoFrame
+     */
     public function getAVCSequenceFrame()
     {
         return $this->avcSequenceHeaderFrame;
     }
 
+    /**
+     * 是否开启音频
+     * @return bool|mixed
+     */
     public function hasAudio()
     {
         return $this->hasAudio;
     }
 
+    /**
+     * 是否开启视频
+     * @return bool|mixed
+     */
     public function hasVideo()
     {
         return $this->hasVideo;
     }
 
+    /**
+     * 获取队列里全部数据
+     * @return MediaFrame[]
+     */
     public function getGopCacheQueue()
     {
         return $this->gopCacheQueue;
     }
 
+    /**
+     * 获取推流全部信息
+     * @return array
+     */
     public function getPublishStreamInfo()
     {
         return [

@@ -21,18 +21,21 @@ use function ord;
  */
 class FlvPlayStream extends EventEmitter implements PlayStreamInterface
 {
+    /** 播放路径 */
     protected $playPath = '';
     /**
+     * 输入 数据分片流
      * @var WMHttpChunkStream
      */
     protected $input;
 
-
+    /** 空闲状态 */
     protected $isPlayerIdling = true;
+    /** 播放中 */
     protected $isPlaying = false;
-
+    /** 是否flv头部 */
     protected $isFlvHeader = false;
-
+    /** 关闭 */
     protected $closed = false;
 
     /**
@@ -77,8 +80,10 @@ class FlvPlayStream extends EventEmitter implements PlayStreamInterface
         }
 
         $this->closed = true;
+        /** 关闭链接 */
         $this->input->close();
         $this->emit('on_close');
+        /** 移除所有监听事件 */
         $this->removeAllListeners();
     }
 
@@ -129,14 +134,29 @@ class FlvPlayStream extends EventEmitter implements PlayStreamInterface
         return true;
     }
 
+    /**
+     * 设置音频
+     * @param $status
+     * @return void
+     */
     public function setEnableAudio($status)
     {
     }
 
+    /**
+     * 设置视频
+     * @param $status
+     * @return void
+     */
     public function setEnableVideo($status)
     {
     }
 
+    /**
+     * 设置关键帧
+     * @param $status
+     * @return void
+     */
     public function setEnableGop($status)
     {
     }
@@ -145,6 +165,7 @@ class FlvPlayStream extends EventEmitter implements PlayStreamInterface
     /**
      * 开始播放
      * @return void
+     * @note 主业务逻辑
      */
     public function startPlay()
     {
