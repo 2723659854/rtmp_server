@@ -99,3 +99,15 @@ if (!function_exists('is_assoc')) {
         return array_keys($arr) !== range(0, count($arr) - 1);
     }
 }
+
+if (!function_exists('app_path')){
+    /**
+     * 应用路径
+     * @param string $path 路径
+     * @return string
+     */
+    function app_path(string $path)
+    {
+        return dirname(__DIR__).'/'.$path;
+    }
+}

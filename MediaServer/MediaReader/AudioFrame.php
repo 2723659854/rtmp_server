@@ -52,6 +52,7 @@ class AudioFrame extends BinaryStream implements MediaFrame
     public $timestamp = 0;
 
 
+
     /**
      * 初始化
      * @param $data

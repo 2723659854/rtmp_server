@@ -11,7 +11,7 @@ class BinaryStream
     /** 指针 */
     private $_index = 0;
     /** 原始数据 */
-    private $_data;
+    public $_data;
 
     /**
      * 原始数据
