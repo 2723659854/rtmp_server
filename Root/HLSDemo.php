@@ -108,6 +108,8 @@ class HLSDemo
         file_put_contents($outputDir . '/playlist.m3u8', $m3u8Content);
     }
 
+    /** 切片时间 */
+    public static  $duration = 3;
 
     /**
      * 音视频数据打包成ts并生成m3u8索引文件
@@ -122,29 +124,55 @@ class HLSDemo
         /** hls 索引 目录  */
         $outputDir = app_path($playStreamPath);
         /** 切片时间3秒 */
-        $segmentDuration = 3;
+        $segmentDuration = self::$duration;
 
+        $nowTime = time();
+        /** 将数据投递到缓存中 */
+        Cache::push($playStreamPath,$frame);
+        /** 获取上一次切片的时间 */
+        if (Cache::has($playStreamPath)){
+            $lastCutTime = Cache::get($playStreamPath);
+        }else{
+            /** 说明还没有开始切片 ，这是第一个数据包，不用切片 */
+            $lastCutTime = $nowTime;
+            /** 初始化操作时间 */
+            Cache::set($playStreamPath,$nowTime);
+        }
+        /** 如果上一次的操作时间和当前时间的间隔大于等于切片时间，则开始切片 */
+        if (($nowTime-$lastCutTime)>$segmentDuration){
+            /** 刷新数据 */
+            $mediaData = Cache::flush($playStreamPath);
+            /** 更新操作时间 */
+            Cache::set($playStreamPath,$nowTime);
+        }else{
+            /** 否则直接退出操作 */
+            return ;
+        }
+        /** 创建存放切片文件目录 */
         if (!is_dir($outputDir)) {
             @mkdir($outputDir, 0777, true);
         }
 
-        $tsFiles = [];
+
+        /** 计数器 */
         $continuity_counter = 0;
-        $segmentIndex = 0;
-        $startTime = time();
 
-        // 伪代码：实际实现中需要从RTMP流中读取数据
-        while (true) {
-            $data = $frame;
-            // 创建TS文件
-            $tsFileName = $outputDir . '/segment' . $segmentIndex . '.ts';
-            $tsFiles[] = 'segment' . $segmentIndex . '.ts';
-            $fileHandle = @fopen($tsFileName, 'wb');
-
-            // 封装ES包（假设数据已经是ES包）
+        /** 获取ts包 */
+        $tsFiles = Cache::flush('ts_'.$playStreamPath);
+        /** ts文件名称 */
+        $tsFile = 'segment' . count($tsFiles) . '.ts';
+        /** ts存放路径 */
+        $tsFileName = $outputDir . '/' . $tsFile;
+        /** 打开ts切片文件 */
+        $fileHandle = @fopen($tsFileName, 'wb');
+        /**
+         * 在 HLS（Http Live Streaming）中，TS 流的结构是一个 TS 文件包含一个 PAT 包、一个 PMT 包和若干个 PES 包。每个ts单元含有一个pes头+多个es包
+         * 在对每个 TS 文件进行解析时，首个 TS 包必定是 PAT 包。在 PAT 包的解析过程中，可以解析出 PMT 的 PID 信息，并将 PMT 类和 PID 入队列。
+         * 没有找到具体的协议规定，网上说法不一致，不知道怎么搞了
+         */
+        foreach ($mediaData as $data){
             if ($data->FRAME_TYPE == MediaFrame::VIDEO_FRAME) {
                 $videoEs = self::createEsPacket($data);
-                // 创建PES包
                 $videoPes = self::createPesHeader(0xE0, (string)$videoEs); // 0xE0 是视频流的 stream_id
                 self::writeTsPacket(256, $videoPes, $fileHandle, $continuity_counter);
             }
@@ -153,28 +181,36 @@ class HLSDemo
                 $audioPes = self::createPesHeader(0xC0, (string)$audioEs); // 0xC0 是音频流的 stream_id
                 self::writeTsPacket(257, $audioPes, $fileHandle, $continuity_counter);
             }
+        }
+        /** 关闭切片文件 */
+        @fclose($fileHandle);
 
-
-            @fclose($fileHandle);
-
-            $segmentIndex++;
-
-            // 切片时间控制
-            if (time() - $startTime >= $segmentDuration) {
-                $startTime = time();
-                self::generateM3U8($tsFiles, $outputDir);
-            }
+        /** 追加ts切片文件 */
+        $tsFiles[]=$tsFile;
+        /** 生成播放索引 */
+        self::generateM3U8($tsFiles, $outputDir);
+        /** 重新缓存所有的ts目录 */
+        foreach ($tsFiles as $fileName){
+            Cache::push('ts_'.$playStreamPath,$fileName);
         }
     }
 
-    // 示例函数：解析NAL单元类型
+    /**
+     * 示例函数：解析NAL单元类型
+     * @param $nalu
+     * @return int
+     */
     public static function parseNALUnitType($nalu)
     {
         // NAL头部的第一个字节的后5位表示NAL单元类型
         return ord(substr($nalu, 0, 1)) & 0x1F;
     }
 
-    // 创建ES包头
+    /**
+     * 创建ES包头
+     * @param $nal_unit_type
+     * @return string
+     */
     public static function createESPacketHeader($nal_unit_type)
     {
         // 创建NAL头部
@@ -183,7 +219,11 @@ class HLSDemo
         return $nal_header . chr($nal_unit_type);
     }
 
-    // 封装H.264视频数据为ES包
+    /**
+     * 封装H.264视频数据为ES包
+     * @param $video_data
+     * @return string
+     */
     public static function createVideoESPacket($video_data)
     {
         $es_packets = [];
@@ -214,7 +254,11 @@ class HLSDemo
         return implode('',$es_packets);
     }
 
-    // 封装MP3音频数据为ES包
+    /**
+     * 封装MP3音频数据为ES包
+     * @param $audio_data
+     * @return mixed
+     */
     public static function createAudioESPacket($audio_data)
     {
         // MP3音频数据即为ES包
