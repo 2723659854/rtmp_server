@@ -5,7 +5,7 @@ use MediaServer\MediaReader\MediaFrame;
 
 /**
  * @purpose hls协议服务
- * @comment 本协议可能存在很大问题，期望有对hls协议比较了解的同仁可以修正，谢谢
+ * @comment 本协议可能存在很大问题，生成的ts文件无法播放，可能会导致播放器崩溃。期望有对hls协议比较了解的同仁帮助修正，谢谢
  * @note 在MediaServer::publisherOnFrame() 里面开启调用
  */
 class HLSDemo
@@ -163,7 +163,7 @@ class HLSDemo
         $patPacket = self::createPatPacket();
         self::writeTsPacket(0, $patPacket, $fileHandle, $continuity_counter, 1);
 
-        /** 写入PMT包 这里的pid也不知道正不正确，有懂得来改一下呗 */
+        /** 写入PMT包 这里的pid也不知道正不正确，应该从流中获取 */
         $pmtPacket = self::createPmtPacket(256, 256, 257); // Example PIDs
         self::writeTsPacket(4096, $pmtPacket, $fileHandle, $continuity_counter, 1);
 
@@ -179,6 +179,11 @@ class HLSDemo
                 $audioPes = self::createPesHeader(0xC0, $audioEs); // 0xC0 是音频流的 stream_id
                 self::writeTsPacket(257, $audioPes, $fileHandle, $continuity_counter, 1);
             }
+            if ($data->FRAME_TYPE == MediaFrame::META_FRAME) {
+                $metaEs = self::createMetaESPacket($data);
+                $metaPes = self::createPesHeader(0xFC, $metaEs); // 0xFC 假设为元数据流的 stream_id
+                self::writeTsPacket(258, $metaPes, $fileHandle, $continuity_counter, 1);
+            }
         }
         /** 关闭切片文件 */
         @fclose($fileHandle);
@@ -192,6 +197,19 @@ class HLSDemo
             Cache::push('ts_' . $playStreamPath, $fileName);
         }
     }
+
+    /**
+     * 封装元数据为ES包
+     * @param $meta_data
+     * @return string
+     */
+    public static function createMetaESPacket($meta_data)
+    {
+        // 假设meta_data是字符串形式
+        $es_packet = "\x00\x00\x00\x01" . $meta_data; // 加入帧开始码
+        return $es_packet;
+    }
+
 
     /**
      * 封装ES包

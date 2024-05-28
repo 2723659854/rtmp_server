@@ -1,6 +1,10 @@
 
 关于hls协议
-参考地址：https://blog.csdn.net/qq_35044535/article/details/77838282
+参考地址：
+https://blog.csdn.net/qq_35044535/article/details/77838282
+https://blog.csdn.net/qq_22310551/article/details/123919042
+https://blog.csdn.net/qq_41839588/article/details/134093390
+
 1.ts简介
 
      ts流最早应用于数字电视领域，其格式非常复杂包含的配置信息表多大十几个，视频格式主要是mpeg2。苹果公司发明的http live stream流媒体是基于ts文件的，不过他大大简化了传统的ts流，只需要2个最基本的配置表PAT和PMT，再加上音视频内容就可以了，hls流媒体视频编码的主要格式为h264/mpeg4，音频为aac/mp3。
