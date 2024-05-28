@@ -154,7 +154,6 @@ class MediaServer
             $p_stream->removeListener('on_frame', self::class . '::publisherOnFrame');
             $p_stream->is_on_frame = false;
         }
-        //todo 给索引文件m3u8追加结束标志
     }
 
     /**
@@ -204,11 +203,9 @@ class MediaServer
                 /** 转发数据包给播放器 */
                 //todo 在这里转换hls协议 ,生成索引文件和切片文件
                 //HLSDemo::make($frame,$publisher->getPublishPath());
-
                 $playStream->frameSend($frame);
             }
         }
-        //todo 生成ts数据包 将$frame数据包编码成ts包
     }
 
 
