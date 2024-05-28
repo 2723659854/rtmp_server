@@ -1,4 +1,5 @@
 <?php
+
 namespace Root;
 
 use MediaServer\MediaReader\MediaFrame;
@@ -18,15 +19,16 @@ class HLSDemo
      * @param $pid
      * @param $payload_unit_start_indicator
      * @param $continuity_counter
+     * @param $adaptation_field_control
      * @return string
      */
-    public static function createTsHeader($pid, $payload_unit_start_indicator = 0, $continuity_counter = 0)
+    public static function createTsHeader($pid, $payload_unit_start_indicator = 0, $continuity_counter = 0, $adaptation_field_control = 0)
     {
         $sync_byte = 0x47;
         $header = chr($sync_byte);
-        $header .= chr(($payload_unit_start_indicator << 6) | ($pid >> 8));
+        $header .= chr((($payload_unit_start_indicator << 6) | ($pid >> 8)) | ($adaptation_field_control << 4));
         $header .= chr($pid & 0xFF);
-        $header .= chr(0x10 | ($continuity_counter & 0x0F));
+        $header .= chr(($continuity_counter & 0x0F));
         return $header;
     }
 
@@ -34,17 +36,33 @@ class HLSDemo
      * 创建PES包头
      * @param $stream_id
      * @param $payload
+     * @param $pts
+     * @param $dts
      * @return string
      */
-    public static function createPesHeader($stream_id, $payload)
+    public static function createPesHeader($stream_id, $payload, $pts = null, $dts = null)
     {
         $pes_start_code = "\x00\x00\x01";
-        $pes_packet_length = strlen($payload) + 8; // header size + payload size
+        $pes_packet_length = strlen($payload) + 6 + (($pts !== null) ? 5 : 0); // header size + payload size
         $header = $pes_start_code;
         $header .= chr($stream_id);
         $header .= chr($pes_packet_length >> 8);
         $header .= chr($pes_packet_length & 0xFF);
-        $header .= "\x80\x80\x05\x21\x00\x01\x00\x01\x00"; // PES header data
+        $header .= (($pts !== null) ? "\x80" : "") . (($dts !== null) ? "\x40" : "") . "\x05";
+        if ($pts !== null) {
+            $header .= chr(0x20 | (($pts >> 29) & 0x07));
+            $header .= chr(($pts >> 22) & 0xFF);
+            $header .= chr((($pts >> 15) & 0xFF) | 0x01);
+            $header .= chr(($pts >> 7) & 0xFF);
+            $header .= chr((($pts & 0xFF) << 1) | 0x01);
+        }
+        if ($dts !== null) {
+            $header .= chr(0x11);
+            $header .= chr(0x22);
+            $header .= chr(0x33);
+            $header .= chr(0x44);
+            $header .= chr(0x55);
+        }
         return $header . $payload;
     }
 
@@ -55,7 +73,7 @@ class HLSDemo
     public static function createPatPacket()
     {
         $pat = "\x00\xB0\x0D\x00\x01\xC1\x00\x00\x00\x01\xF0\x01\x2E";
-        return str_pad($pat, 184, chr(0xFF));
+        return str_pad($pat, 188, chr(0xFF));
     }
 
     /**
@@ -71,7 +89,7 @@ class HLSDemo
         $pmt .= chr($pcr_pid >> 8) . chr($pcr_pid & 0xFF) . "\xF0\x00";
         $pmt .= "\x1B" . chr($video_pid >> 8) . chr($video_pid & 0xFF) . "\xF0\x00";
         $pmt .= "\x0F" . chr($audio_pid >> 8) . chr($audio_pid & 0xFF) . "\xF0\x00";
-        return str_pad($pmt, 184, chr(0xFF));
+        return str_pad($pmt, 188, chr(0xFF));
     }
 
     /**
@@ -81,9 +99,10 @@ class HLSDemo
      * @param $fileHandle
      * @param $continuity_counter
      * @param $payload_unit_start_indicator
+     * @param $adaptation_field_control
      * @return void
      */
-    public static function writeTsPacket($pid, $payload, $fileHandle, &$continuity_counter, $payload_unit_start_indicator = 0)
+    public static function writeTsPacket($pid, $payload, $fileHandle, &$continuity_counter, $payload_unit_start_indicator = 0, $adaptation_field_control = 1)
     {
         $packetSize = 188;
         $payloadSize = $packetSize - 4; // 4 bytes for TS header
@@ -92,7 +111,7 @@ class HLSDemo
         $i = 0;
 
         while ($i < $dataLen) {
-            $header = self::createTsHeader($pid, ($i == 0) ? $payload_unit_start_indicator : 0, $continuity_counter);
+            $header = self::createTsHeader($pid, ($i == 0) ? $payload_unit_start_indicator : 0, $continuity_counter, $adaptation_field_control);
             $continuity_counter = ($continuity_counter + 1) % 16;
 
             $chunk = substr($payload, $i, $payloadSize);
@@ -171,12 +190,14 @@ class HLSDemo
         foreach ($mediaData as $data) {
             if ($data->FRAME_TYPE == MediaFrame::VIDEO_FRAME) {
                 $videoEs = self::createEsPacket($data);
-                $videoPes = self::createPesHeader(0xE0, $videoEs); // 0xE0 是视频流的 stream_id
+                $videoPes = self::createPesHeader(0xE0, $videoEs,$data->timestamp,$data->timestamp); // 0xE0 是视频流的 stream_id
+                //$videoPes = self::createPesHeader(0xE0, $videoEs); // 0xE0 是视频流的 stream_id
                 self::writeTsPacket(256, $videoPes, $fileHandle, $continuity_counter, 1);
             }
             if ($data->FRAME_TYPE == MediaFrame::AUDIO_FRAME) {
                 $audioEs = self::createEsPacket($data);
-                $audioPes = self::createPesHeader(0xC0, $audioEs); // 0xC0 是音频流的 stream_id
+                $audioPes = self::createPesHeader(0xC0, $audioEs,$data->timestamp,$data->timestamp); // 0xC0 是音频流的 stream_id
+                //$audioPes = self::createPesHeader(0xC0, $audioEs); // 0xC0 是音频流的 stream_id
                 self::writeTsPacket(257, $audioPes, $fileHandle, $continuity_counter, 1);
             }
             if ($data->FRAME_TYPE == MediaFrame::META_FRAME) {
