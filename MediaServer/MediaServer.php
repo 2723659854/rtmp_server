@@ -10,6 +10,7 @@ use MediaServer\PushServer\PublishStreamInterface;
 use MediaServer\PushServer\VerifyAuthStreamInterface;
 use MediaServer\Rtmp\RtmpChunk;
 use MediaServer\Rtmp\RtmpPacket;
+use Root\HLSDemo;
 
 
 /**
@@ -201,10 +202,12 @@ class MediaServer
             /** 如果播放器不是空闲状态 */
             if (!$playStream->isPlayerIdling()) {
                 /** 转发数据包给播放器 */
+                //todo 在这里转换hls协议 ,生成索引文件和切片文件
+                //HLSDemo::make($frame,$publisher->getPublishPath());
+
                 $playStream->frameSend($frame);
             }
         }
-        //self::writeTs($frame);
         //todo 生成ts数据包 将$frame数据包编码成ts包
     }
 
@@ -303,67 +306,4 @@ class MediaServer
         return true;
     }
 
-
-    /**
-     * 测试
-     * @param MediaFrame $frame 音视频数据
-     * @return void
-     */
-    static function writeTs(MediaFrame $frame)
-    {
-        $video = app_path('video');
-        if (!is_dir($video)){
-            @mkdir($video,0777,true);
-        }
-        static $number = 0;
-
-        static $_queue = [];
-        if ($frame->FRAME_TYPE == MediaFrame::AUDIO_FRAME){
-
-
-            // 创建一个AudioFrame对象
-            $audioFrame = $frame;
-
-            // 提取AAC数据
-            $aacData =Packetizer::extractAACData($audioFrame);
-
-            // 获取时间戳
-            $timestamp = Packetizer::getTimestamp($audioFrame);
-
-            // 获取PID
-            $pid = Packetizer::getPID();
-
-            // 封装为ES包
-            $esPacket = Packetizer::wrapES($aacData);
-
-            // 封装为PES包
-            $pesPacket = Packetizer::wrapPES($esPacket, $timestamp);
-
-            // 封装为TS包
-            $tsPacket = Packetizer::wrapTS($pesPacket, $pid);
-
-            // 切片
-            $fileName = "b".$number.'.ts';
-
-            $fb = fopen($video.'/'.$fileName,'wb');
-            fwrite($fb,$tsPacket);
-            fclose($fb);
-            $_queue[]=$fileName;
-            $number++;
-        }
-
-        if ($number==50){
-            $playList = $video.'/'.'demo.m3u8';
-            file_put_contents($playList,"#EXTM3U\r\n". "#EXT-X-VERSION:3\r\n". "#EXT-X-TARGETDURATION:1\r\n". "#EXT-X-MEDIA-SEQUENCE:0\r\n");
-            $indexList = file_get_contents($playList);
-
-            foreach ($_queue as $name){
-                $indexList .= "#EXTINF:1.000000,\r\n"."{$name}\r\n";
-            }
-
-            file_put_contents($playList,$indexList);
-            echo "写入播放列表完成了\r\n";
-        }
-
-    }
 }

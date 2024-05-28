@@ -108,6 +108,6 @@ if (!function_exists('app_path')){
      */
     function app_path(string $path)
     {
-        return dirname(__DIR__).'/'.$path;
+        return rtrim(dirname(__DIR__).'/'.$path,'/');
     }
 }

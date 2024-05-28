@@ -9,6 +9,7 @@ use MediaServer\MediaReader\MediaFrame;
 use MediaServer\MediaReader\MetaDataFrame;
 use MediaServer\MediaReader\VideoFrame;
 use MediaServer\MediaServer;
+use Root\HLSDemo;
 
 /**
  * 播放
