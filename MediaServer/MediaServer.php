@@ -202,7 +202,7 @@ class MediaServer
             if (!$playStream->isPlayerIdling()) {
                 /** 转发数据包给播放器 */
                 //todo 在这里转换hls协议 ,生成索引文件和切片文件
-                HLSDemo::make($frame,$publisher->getPublishPath());
+                //HLSDemo::make($frame,$publisher->getPublishPath());
                 $playStream->frameSend($frame);
             }
         }
