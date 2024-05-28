@@ -167,7 +167,7 @@ class HLSDemo
         $pmtPacket = self::createPmtPacket(256, 256, 257); // Example PIDs
         self::writeTsPacket(4096, $pmtPacket, $fileHandle, $continuity_counter, 1);
 
-        /** 循环将aac和avc数据写入到ts文件 */
+        /** 循环将aac和avc数据写入到ts文件 ，无法播放的原因可能是写入的数据有问题 也许不应该是$data->_data吧 */
         foreach ($mediaData as $data) {
             if ($data->FRAME_TYPE == MediaFrame::VIDEO_FRAME) {
                 $videoEs = self::createEsPacket($data);
@@ -206,7 +206,7 @@ class HLSDemo
     public static function createMetaESPacket($meta_data)
     {
         // 假设meta_data是字符串形式
-        $es_packet = "\x00\x00\x00\x01" . $meta_data; // 加入帧开始码
+        $es_packet = "\x00\x00\x00\x01" . $meta_data->_data; // 加入帧开始码
         return $es_packet;
     }
 
