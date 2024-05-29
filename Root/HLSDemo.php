@@ -10,13 +10,12 @@ use MediaServer\MediaReader\MediaFrame;
  * @note 里面有两张pat包，错误，需要修正
  * 正确的ts报数据应该是：
  * Done
-671 MPEG TS packets read
-PID: 0000 (0x0000)      1 packets
-PID: 0017 (0x0011)      1 packets
-PID: 0256 (0x0100)      622 packets
-PID: 0257 (0x0101)      46 packets
-PID: 4096 (0x1000)      1 packets
-
+PID: 0000 (0x0000) 1 packets：这是 PAT（Program Association Table）包，应该只有一个。
+PID: 0017 (0x0011) 1 packets：这是 PMT（Program Map Table）包，应该只有一个。
+PID: 0256 (0x0100) 622 packets：这是视频流的包，数量很多，符合预期。
+PID: 0257 (0x0101) 46 packets：这是音频流的包，数量较少，但也是预期的。
+PID: 4096 (0x1000) 1 packets：扩展的数据pid。
+上面的数据是ffmpeg生成的
  * 本协议生成的包的数据：
  *Done
 5749 MPEG TS packets read
@@ -25,7 +24,8 @@ PID: 0256 (0x0100)      5591 packets
 PID: 0257 (0x0101)      154 packets
 PID: 4096 (0x1000)      2 packets
 
- * 缺少了一个pid=17，多了一个pid=0
+ * 缺少了一个pid=17，多了一个pid=0=》多了一个pat表 少了一个pmt表
+ * 需要手动生成 这两张表，仔细检查一下
  */
 class HLSDemo
 {
