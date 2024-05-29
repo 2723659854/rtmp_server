@@ -11,6 +11,7 @@ use MediaServer\PushServer\VerifyAuthStreamInterface;
 use MediaServer\Rtmp\RtmpChunk;
 use MediaServer\Rtmp\RtmpPacket;
 use Root\HLSDemo;
+use Root\HLSDemo2;
 
 
 /**
