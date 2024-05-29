@@ -197,14 +197,17 @@ class HLSDemo
         $tsFileName = $outputDir . '/' . $tsFile;
         /** 打开切片文件 */
         $fileHandle = @fopen($tsFileName, 'wb');
+        /*--------------------------------------------------------------------------------*/
+        //todo 问题出在写入pat包和pmt包这里。参考 https://blog.csdn.net/m0_37599645/article/details/117135283
         /** 先创建pat表 */
         $patPacket = self::createPatPacket();
         /** 写入pat表数据 */
         self::writeTsPacket(0, $patPacket, $fileHandle, $continuity_counter, 1);
-        /** 创建pmt表 */
-        $pmtPacket = self::createPmtPacket(256, 256, 257);
+        /** 创建pmt表 有问题*/
+        $pmtPacket = self::createPmtPacket(256, 257, 256);
         /** 写入pmt数据 */
         self::writeTsPacket(4096, $pmtPacket, $fileHandle, $continuity_counter, 1);
+        /*--------------------------------------------------------------------------------------*/
         /** 循环处理媒体数据 */
         foreach ($mediaData as $data) {
             /** 处理视频帧数据 */
