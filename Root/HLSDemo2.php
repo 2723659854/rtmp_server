@@ -5,7 +5,6 @@ namespace Root;
 
 use MediaServer\MediaReader\MediaFrame;
 
-
 class HLSDemo2
 {
     /** 切片时间3秒 */
@@ -148,14 +147,17 @@ class HLSDemo2
         $tsFile = 'segment' . count($tsFiles) . '.ts';
         /** 设置新切片文件路径 */
         $tsFileName = $outputDir . '/' . $tsFile;
+        ///** 打开
         /** 打开切片文件 */
         $fileHandle = @fopen($tsFileName, 'wb');
         /** 先创建pat表 */
-        $patPacket = self::createPatPacket();
-        /** 写入pat表数据 */
-        self::writeTsPacket(0, $patPacket, $fileHandle, $continuity_counter, 1);
+        if (empty($tsFiles)) {
+            $patPacket = self::createPatPacket();
+            /** 写入pat表数据 */
+            self::writeTsPacket(0, $patPacket, $fileHandle, $continuity_counter, 1);
+        }
         /** 创建pmt表 */
-        $pmtPacket = self::createPmtPacket(256, 257,258);
+        $pmtPacket = self::createPmtPacket(256, 257, 258);
         /** 写入pmt数据 */
         self::writeTsPacket(4096, $pmtPacket, $fileHandle, $continuity_counter, 1);
         /** 循环处理媒体数据 */

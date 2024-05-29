@@ -7,6 +7,7 @@ use MediaServer\MediaReader\MediaFrame;
 /**
  * @purpose hls协议
  * @comment 感觉打脑壳额，生成的ts文件看着像那么回事，但是无法播放。应该是哪里参数不对。有兴趣的朋友可以帮忙修正以下。
+ * @note 里面有两张pat包，错误，需要修正
  */
 class HLSDemo
 {
