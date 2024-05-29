@@ -1,9 +1,7 @@
 <?php
-
 namespace Root;
 
 use MediaServer\MediaReader\MediaFrame;
-
 /**
  * @purpose hls协议服务
  * @comment 本协议可能存在很大问题，生成的ts文件无法播放，可能会导致播放器崩溃。期望有对hls协议比较了解的同仁帮助修正，谢谢
@@ -106,10 +104,8 @@ class HLSDemo
     {
         $packetSize = 188;
         $payloadSize = $packetSize - 4; // 4 bytes for TS header
-
         $dataLen = strlen($payload);
         $i = 0;
-
         while ($i < $dataLen) {
             $header = self::createTsHeader($pid, ($i == 0) ? $payload_unit_start_indicator : 0, $continuity_counter, $adaptation_field_control);
             $continuity_counter = ($continuity_counter + 1) % 16;
@@ -120,7 +116,6 @@ class HLSDemo
             if (strlen($chunk) < $payloadSize) {
                 $chunk = str_pad($chunk, $payloadSize, chr(0xFF));
             }
-
             $packet = $header . $chunk;
             fwrite($fileHandle, $packet);
         }
@@ -138,7 +133,6 @@ class HLSDemo
         $outputDir = app_path($playStreamPath);
         /** 切片时间3秒 */
         $segmentDuration = self::$duration;
-
         $nowTime = time();
         /** 将数据投递到缓存中 */
         Cache::push($playStreamPath, $frame);
@@ -165,10 +159,8 @@ class HLSDemo
         if (!is_dir($outputDir)) {
             @mkdir($outputDir, 0777, true);
         }
-
         /** 计数器 */
         $continuity_counter = 0;
-
         /** 获取ts包 */
         $tsFiles = Cache::flush('ts_' . $playStreamPath);
         /** ts文件名称 */
@@ -177,11 +169,9 @@ class HLSDemo
         $tsFileName = $outputDir . '/' . $tsFile;
         /** 打开ts切片文件 */
         $fileHandle = @fopen($tsFileName, 'wb');
-
         /** 写入PAT包 */
         $patPacket = self::createPatPacket();
         self::writeTsPacket(0, $patPacket, $fileHandle, $continuity_counter, 1);
-
         /** 写入PMT包 这里的pid也不知道正不正确，应该从流中获取 */
         $pmtPacket = self::createPmtPacket(256, 256, 257); // Example PIDs
         self::writeTsPacket(4096, $pmtPacket, $fileHandle, $continuity_counter, 1);
@@ -189,19 +179,39 @@ class HLSDemo
         /** 循环将aac和avc数据写入到ts文件 ，无法播放的原因可能是写入的数据有问题 也许不应该是$data->_data吧 */
         foreach ($mediaData as $data) {
             if ($data->FRAME_TYPE == MediaFrame::VIDEO_FRAME) {
-                $videoEs = self::createEsPacket($data);
-                $videoPes = self::createPesHeader(0xE0, $videoEs,$data->timestamp,$data->timestamp); // 0xE0 是视频流的 stream_id
-                //$videoPes = self::createPesHeader(0xE0, $videoEs); // 0xE0 是视频流的 stream_id
+
+                /**  PTS = DTS + compositionTime */
+                /** 播放时间戳 */
+                $pts = $data->timestamp;
+                /** 视频数据包 */
+                $avc = $data->getAVCPacket();
+                /** 校验时间戳 */
+                $compositionTime = $avc->compositionTime;
+                /** 解码播放时间戳 */
+                $dts = $pts - $compositionTime;
+                /** 使用avc的h264编码的视频数据生成es包 */
+                $videoEs = self::createEsPacket($avc->stream->dump(), 'avc');
+                /** 生成pes包 */
+                $videoPes = self::createPesHeader(0xE0, $videoEs, $pts, $dts); // 0xE0 是视频流的 stream_id
+                /** 生成ts包 */
                 self::writeTsPacket(256, $videoPes, $fileHandle, $continuity_counter, 1);
             }
             if ($data->FRAME_TYPE == MediaFrame::AUDIO_FRAME) {
-                $audioEs = self::createEsPacket($data);
-                $audioPes = self::createPesHeader(0xC0, $audioEs,$data->timestamp,$data->timestamp); // 0xC0 是音频流的 stream_id
-                //$audioPes = self::createPesHeader(0xC0, $audioEs); // 0xC0 是音频流的 stream_id
+                /** pts播放时间戳 */
+                $pts = $data->timestamp;
+                /** 音频没有dts */
+                $dts = null;
+                /** 音频数据包 */
+                $aac = $data->getAACPacket();
+                /** 使用音频编码数据生成es包 */
+                $audioEs = self::createEsPacket($aac->stream->dump(), 'aac');
+                /** 生成pes包 */
+                $audioPes = self::createPesHeader(0xC0, $audioEs, $pts, $dts); // 0xC0 是音频流的 stream_id
+                /** 生成ts包 */
                 self::writeTsPacket(257, $audioPes, $fileHandle, $continuity_counter, 1);
             }
             if ($data->FRAME_TYPE == MediaFrame::META_FRAME) {
-                $metaEs = self::createMetaESPacket($data);
+                $metaEs = self::createMetaESPacket($data->dump());
                 $metaPes = self::createPesHeader(0xFC, $metaEs); // 0xFC 假设为元数据流的 stream_id
                 self::writeTsPacket(258, $metaPes, $fileHandle, $continuity_counter, 1);
             }
@@ -221,31 +231,29 @@ class HLSDemo
 
     /**
      * 封装元数据为ES包
-     * @param $meta_data
+     * @param string $meta_data
      * @return string
      */
-    public static function createMetaESPacket($meta_data)
+    public static function createMetaESPacket(string $meta_data)
     {
-        // 假设meta_data是字符串形式
-        $es_packet = "\x00\x00\x00\x01" . $meta_data->_data; // 加入帧开始码
-        return $es_packet;
+        return "\x00\x00\x00\x01" . $meta_data; // 加入帧开始码
     }
-
 
     /**
      * 封装ES包
-     * @param MediaFrame $data
+     * @param string $data
+     * @param string $type
      * @return string
      */
-    public static function createEsPacket(MediaFrame $data)
+    public static function createEsPacket(string $data, string $type)
     {
         // 封装H.264视频数据为ES包
-        if ($data->FRAME_TYPE == MediaFrame::VIDEO_FRAME) {
-            return self::createVideoESPacket($data->_data);
+        if ($type == 'avc') {
+            return self::createVideoESPacket($data);
         }
         // 封装MP3音频数据为ES包
-        if ($data->FRAME_TYPE == MediaFrame::AUDIO_FRAME) {
-            return self::createAudioESPacket($data->_data);
+        if ($type == 'aac') {
+            return self::createAudioESPacket($data);
         }
     }
 
@@ -331,7 +339,6 @@ class HLSDemo
         $m3u8Content .= "#EXT-X-VERSION:3\n";
         $m3u8Content .= "#EXT-X-TARGETDURATION:3\n";
         $m3u8Content .= "#EXT-X-MEDIA-SEQUENCE:0\n";
-
         foreach ($tsFiles as $tsFile) {
             $m3u8Content .= "#EXTINF:3.000,\n";
             $m3u8Content .= $tsFile . "\n";
