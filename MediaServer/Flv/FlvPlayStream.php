@@ -176,14 +176,16 @@ class FlvPlayStream extends EventEmitter implements PlayStreamInterface
         logger()->info('flv play stream start play');
         /** 还没有发送flv协议头 */
         if (!$this->isFlvHeader) {
-            /** 组装flv头部 */
+            /** 组装flv头部 签名=flv （0x46,0x4c,0x66）, 版本号=x01, flag = x00，headerSize =9(flvheader的总长度=9，前一个数据块大小为0) */
             $flvHeader = "FLV\x01\x00" . pack('NN', 9, 0);
-            /** 组装音频参数编码 */
+            /** 是否有音频数据 */
             if ($this->isEnableAudio() && $publishStream->hasAudio()) {
+                /** 使用ord将$flvHeader[4]转换为8为二进制 ASCII 码，然后和后面的4进行或运算，4的二进制是00000100 ，第三位是1，或运算后那么$flvHeader[4]的第3位变为1 */
                 $flvHeader[4] = chr(ord($flvHeader[4]) | 4);
             }
-            /** 视频参数编码 */
+            /** 是否有视频数据 */
             if ($this->isEnableVideo() && $publishStream->hasVideo()) {
+                /** 同理：1的二进制00000001 那么$flvHeader[4]的右边第一位变为1 */
                 $flvHeader[4] = chr(ord($flvHeader[4]) | 1);
             }
             /** 发送flv协议头部 数据 */

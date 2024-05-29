@@ -30,9 +30,13 @@ class FlvHeader
     {
 
         $data = unpack("a3signature/Cversion/CtypeFlags/NdataOffset", $data);
+        /** 签名：flv （0x46,0x4c,0x66）*/
         $this->signature = $data['signature'];
+        /** 版本号：0x01 */
         $this->version = $data['version'];
+        /** flag: 00000101 前5为固定为0 ，第六位1表示有音频 第七位必须为0 第八位1表示有视频 */
         $this->typeFlags = $data['typeFlags'];
+        /** 总是为9 */
         $this->dataOffset = $data['dataOffset'];
         $this->hasAudio = $this->typeFlags & 4 ? true : false;
         $this->hasVideo = $this->typeFlags & 1 ? true : false;
