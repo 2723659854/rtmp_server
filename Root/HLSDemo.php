@@ -8,6 +8,24 @@ use MediaServer\MediaReader\MediaFrame;
  * @purpose hls协议
  * @comment 感觉打脑壳额，生成的ts文件看着像那么回事，但是无法播放。应该是哪里参数不对。有兴趣的朋友可以帮忙修正以下。
  * @note 里面有两张pat包，错误，需要修正
+ * 正确的ts报数据应该是：
+ * Done
+671 MPEG TS packets read
+PID: 0000 (0x0000)      1 packets
+PID: 0017 (0x0011)      1 packets
+PID: 0256 (0x0100)      622 packets
+PID: 0257 (0x0101)      46 packets
+PID: 4096 (0x1000)      1 packets
+
+ * 本协议生成的包的数据：
+ *Done
+5749 MPEG TS packets read
+PID: 0000 (0x0000)      2 packets
+PID: 0256 (0x0100)      5591 packets
+PID: 0257 (0x0101)      154 packets
+PID: 4096 (0x1000)      2 packets
+
+ * 缺少了一个pid=17，多了一个pid=0
  */
 class HLSDemo
 {

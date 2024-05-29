@@ -1,8 +1,8 @@
 <?php
 require_once __DIR__.'/vendor/autoload.php';
 
-$file = __DIR__.'/a/b0.ts';
-//$file = __DIR__.'/a/b/segment0.ts';
+//$file = __DIR__.'/a/b1.ts';
+$file = __DIR__.'/a/b/segment0.ts';
 $inFileHandle = fopen($file, 'rb');
 if ($inFileHandle === false) {
     throw new Exception();

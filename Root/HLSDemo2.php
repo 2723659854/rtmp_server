@@ -1,23 +1,12 @@
 <?php
-
-
 namespace Root;
 
 use MediaServer\MediaReader\MediaFrame;
 
 class HLSDemo2
 {
-    /** 切片时间3秒 */
     public static $duration = 3;
 
-    /**
-     * 创建ts包头
-     * @param int $pid
-     * @param int $payload_unit_start_indicator
-     * @param int $continuity_counter
-     * @param int $adaptation_field_control
-     * @return string
-     */
     public static function createTsHeader(int $pid, $payload_unit_start_indicator = 0, $continuity_counter = 0, $adaptation_field_control = 1)
     {
         $sync_byte = 0x47;
@@ -28,22 +17,14 @@ class HLSDemo2
         return $header;
     }
 
-    /**
-     * 创建pes包头
-     * @param int $stream_id
-     * @param string $payload
-     * @param int $pts
-     * @param int|null $dts
-     * @return string
-     */
     public static function createPesHeader($stream_id, $payload, $pts, $dts = null)
     {
         $pes_start_code = "\x00\x00\x01";
-        $pes_packet_length = 3 + 5 + strlen($payload) + ($dts !== null ? 5 : 0);
-        $flags = 0x80;
-        $header_data_length = 5;
+        $pes_packet_length = 3 + 5 + strlen($payload) + ($dts !== null ? 5 : 0); // header size + payload size
+        $flags = 0x80; // '10' for PTS
+        $header_data_length = 5; // PTS is always present
         if ($dts !== null) {
-            $flags |= 0x40;
+            $flags |= 0x40; // '1' for DTS
             $header_data_length += 5;
         }
 
@@ -51,7 +32,7 @@ class HLSDemo2
         $pes_header .= chr($stream_id);
         $pes_header .= chr($pes_packet_length >> 8);
         $pes_header .= chr($pes_packet_length & 0xFF);
-        $pes_header .= chr(0x80);
+        $pes_header .= chr(0x80); // marker bits '10'
         $pes_header .= chr($flags);
         $pes_header .= chr($header_data_length);
 
@@ -72,20 +53,28 @@ class HLSDemo2
         return $pes_header . $payload;
     }
 
-    /**
-     * 生成ts包
-     * @param int $pid
-     * @param string $payload
-     * @param resource $fileHandle
-     * @param int $continuity_counter
-     * @param int $payload_unit_start_indicator
-     * @param int $adaptation_field_control
-     * @return void
-     */
+    public static function createPatPacket()
+    {
+        $pat = "\x00\xB0\x0D\x00\x01\xC1\x00\x00";
+        $pat .= "\x00\x01\xF0\x01"; // Program 1, PMT PID 0x1001
+        $pat .= "\x00\x11\xF0\x11"; // PID = 17
+        $pat .= "\x2E\xB0\x0D\x00\x00\xC1\x00\x00"; // CRC32 Placeholder (will need to calculate)
+        return str_pad($pat, 188, chr(0xFF));
+    }
+
+    public static function createPmtPacket(int $pcr_pid, int $video_pid, int $audio_pid)
+    {
+        $pmt = "\x02\xB0\x17\x00\x01\xC1\x00\x00";
+        $pmt .= chr($pcr_pid >> 8) . chr($pcr_pid & 0xFF) . "\xF0\x00";
+        $pmt .= "\x1B" . chr($video_pid >> 8) . chr($video_pid & 0xFF) . "\xF0\x00";
+        $pmt .= "\x0F" . chr($audio_pid >> 8) . chr($audio_pid & 0xFF) . "\xF0\x00";
+        return str_pad($pmt, 188, chr(0xFF));
+    }
+
     public static function writeTsPacket(int $pid, string $payload, $fileHandle, int &$continuity_counter, int $payload_unit_start_indicator = 0, int $adaptation_field_control = 1)
     {
         $packetSize = 188;
-        $payloadSize = $packetSize - 4;
+        $payloadSize = $packetSize - 4; // 4 bytes for TS header
         $dataLen = strlen($payload);
         $i = 0;
         while ($i < $dataLen) {
@@ -103,155 +92,71 @@ class HLSDemo2
         }
     }
 
-    /**
-     * hls协议入口
-     * @param MediaFrame $frame
-     * @param string $playStreamPath
-     * @return void
-     */
     public static function make(MediaFrame $frame, string $playStreamPath)
     {
-        /** ts数据包保存路径 */
         $outputDir = app_path($playStreamPath);
-        /** 切片时间 */
         $segmentDuration = self::$duration;
-        /** 当前时间 */
         $nowTime = time();
-        /** 先将媒体数据投递到缓存中 */
         Cache::push($playStreamPath, $frame);
-        /** 获取上一次切片操作时间 */
+
         if (Cache::has($playStreamPath)) {
             $lastCutTime = Cache::get($playStreamPath);
         } else {
-            /** 如果没有，则设置当前时间为最后一次切片时间 */
             $lastCutTime = $nowTime;
             Cache::set($playStreamPath, $nowTime);
         }
-        /** 比较当前时间和上一次切片时间，若大于切片时间，则取出全部媒体数据准备打包。 */
+
         if (($nowTime - $lastCutTime) > $segmentDuration) {
             $mediaData = Cache::flush($playStreamPath);
             Cache::set($playStreamPath, $nowTime);
         } else {
-            /** 否则，退出等待下一次操作 */
             return;
         }
-        /** 创建目录 */
+
         if (!is_dir($outputDir)) {
             @mkdir($outputDir, 0777, true);
         }
-        /** 切片的序号，因为可能一个音视频帧数据很大，会被分割成很多个小的包，*/
+
         $continuity_counter = 0;
-        /** 取出所有的切片文件名称 */
         $tsFiles = Cache::flush('ts_' . $playStreamPath);
-        /** 设置切片文件名称 */
         $tsFile = 'segment' . count($tsFiles) . '.ts';
-        /** 设置新切片文件路径 */
         $tsFileName = $outputDir . '/' . $tsFile;
-        ///** 打开
-        /** 打开切片文件 */
         $fileHandle = @fopen($tsFileName, 'wb');
-        /** 先创建pat表 */
-        if (empty($tsFiles)) {
-            $patPacket = self::createPatPacket();
-            /** 写入pat表数据 */
-            self::writeTsPacket(0, $patPacket, $fileHandle, $continuity_counter, 1);
-        }
-        /** 创建pmt表 */
-        $pmtPacket = self::createPmtPacket(256, 257, 258);
-        /** 写入pmt数据 */
+
+        $patPacket = self::createPatPacket();
+        self::writeTsPacket(0, $patPacket, $fileHandle, $continuity_counter, 1);
+
+        $pmtPacket = self::createPmtPacket(256, 256, 257);
         self::writeTsPacket(4096, $pmtPacket, $fileHandle, $continuity_counter, 1);
-        /** 循环处理媒体数据 */
+
         foreach ($mediaData as $data) {
-            /** 处理视频帧数据 */
             if ($data->FRAME_TYPE == MediaFrame::VIDEO_FRAME) {
-                /** 获取播放时间戳 */
-                $pts = $data->timestamp * 90000; // 时间戳转换成90kHz时钟
-                /** 获取解码时间戳 */
+                $pts = $data->timestamp * 90000;
                 $dts = $pts;
-                /** 获取视频帧es数据，因为这个已经是被编码器编译过的，不需要再次编码 */
                 $videoEs = $data->getAVCPacket()->stream->dump();
-                /** 创建视频帧的pes包 */
                 $videoPes = self::createPesHeader(0xE0, $videoEs, $pts, $dts);
-                /** 写入ts包 */
                 self::writeTsPacket(256, $videoPes, $fileHandle, $continuity_counter, 1);
             }
-            /** 如果是音频数据包 */
             if ($data->FRAME_TYPE == MediaFrame::AUDIO_FRAME) {
-                /** 处理播放时间戳 */
-                $pts = $data->timestamp * 90000; // 时间戳转换成90kHz时钟
-                /** 处理aac音频数据 */
+                $pts = $data->timestamp * 90000;
                 $audioEs = $data->getAACPacket()->stream->dump();
-                /** 创建音频pes */
                 $audioPes = self::createPesHeader(0xC0, $audioEs, $pts);
-                /** 创建ts包 */
                 self::writeTsPacket(257, $audioPes, $fileHandle, $continuity_counter, 1);
             }
-            /** 如果是媒体元数据 */
-            if ($data->FRAME_TYPE == MediaFrame::META_FRAME) {
-                /** 创建es包 */
-                $metaEs = "\x00\x00\x00\x01" . $data->dump();
-                /** 创建pes包 */
-                $metaPes = self::createPesHeader(0xFC, $metaEs, $data->timestamp);
-                /** 创建ts包 */
-                self::writeTsPacket(258, $metaPes, $fileHandle, $continuity_counter, 1);
-            }
         }
-        /** 关闭ts文件 */
-        @fclose($fileHandle);
-        /** 追加到切片文件目录 */
-        $tsFiles[] = $tsFile;
-        /** 生成索引文件 */
-        self::generateM3U8($tsFiles, $outputDir);
-        /** 将目录存入缓存 */
-        foreach ($tsFiles as $fileName) {
-            Cache::push('ts_' . $playStreamPath, $fileName);
-        }
+
+        fclose($fileHandle);
+        Cache::push('ts_' . $playStreamPath, $tsFile);
+        self::updateM3U8File($outputDir, $playStreamPath);
     }
 
-    /**
-     * 生成播放列表索引
-     * @param array $tsFiles
-     * @param string $outputDir
-     * @return void
-     */
-    public static function generateM3U8(array $tsFiles, string $outputDir)
+    public static function updateM3U8File(string $outputDir, string $playStreamPath)
     {
-        $m3u8Content = "#EXTM3U\n";
-        $m3u8Content .= "#EXT-X-VERSION:3\n";
-        $m3u8Content .= "#EXT-X-TARGETDURATION:3\n";
-        $m3u8Content .= "#EXT-X-MEDIA-SEQUENCE:0\n";
+        $tsFiles = Cache::get('ts_' . $playStreamPath);
+        $m3u8Content = "#EXTM3U\n#EXT-X-VERSION:3\n#EXT-X-TARGETDURATION:" . self::$duration . "\n#EXT-X-MEDIA-SEQUENCE:0\n";
         foreach ($tsFiles as $tsFile) {
-            $m3u8Content .= "#EXTINF:3.000,\n";
-            $m3u8Content .= $tsFile . "\n";
+            $m3u8Content .= "#EXTINF:" . self::$duration . ",\n" . $tsFile . "\n";
         }
-        $m3u8Content .= "#EXT-X-ENDLIST\n";
         file_put_contents($outputDir . '/playlist.m3u8', $m3u8Content);
     }
-
-    /**
-     * 创建pat节目表
-     * @return string
-     */
-    public static function createPatPacket()
-    {
-        $pat = "\x00\xB0\x0D\x00\x01\xC1\x00\x00\x00\x01\xF0\x01\x2E";
-        return str_pad($pat, 188, chr(0xFF));
-    }
-
-    /**
-     * pmt信息流表
-     * @param int $pcr_pid
-     * @param int $video_pid
-     * @param int $audio_pid
-     * @return string
-     */
-    public static function createPmtPacket(int $pcr_pid, int $video_pid, int $audio_pid)
-    {
-        $pmt = "\x02\xB0\x17\x00\x01\xC1\x00\x00";
-        $pmt .= chr($pcr_pid >> 8) . chr($pcr_pid & 0xFF) . "\xF0\x00";
-        $pmt .= "\x1B" . chr($video_pid >> 8) . chr($video_pid & 0xFF) . "\xF0\x00";
-        $pmt .= "\x0F" . chr($audio_pid >> 8) . chr($audio_pid & 0xFF) . "\xF0\x00";
-        return str_pad($pmt, 188, chr(0xFF));
-    }
 }
-
