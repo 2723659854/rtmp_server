@@ -92,4 +92,15 @@ class Cache
         }
         return $array;
     }
+
+    /**
+     * 清空缓存
+     * @param string $name
+     * @return void
+     */
+    public static function clear(string $name)
+    {
+        unset(self::$_list[$name]);
+        unset(self::$_temp[$name]);
+    }
 }

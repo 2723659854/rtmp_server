@@ -11,7 +11,6 @@ use MediaServer\PushServer\VerifyAuthStreamInterface;
 use MediaServer\Rtmp\RtmpChunk;
 use MediaServer\Rtmp\RtmpPacket;
 use Root\HLSDemo;
-use Root\HLSDemo2;
 
 /**
  * @purpose 媒体中心服务
@@ -117,6 +116,7 @@ class MediaServer
      */
     static protected function delPublishStream($path)
     {
+        HLSDemo::close($path);
         unset(self::$publishStream[$path]);
     }
 
