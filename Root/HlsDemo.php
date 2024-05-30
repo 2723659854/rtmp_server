@@ -1,14 +1,10 @@
 <?php
-
-
 namespace Root;
 
 use MediaServer\MediaReader\MediaFrame;
 
-/**
- * @purpose 这个协议符合mpeg规范，但是缺少了pmt，使用ffmpeg检查发现没有有效的音视频数据
- */
-class HLSDemo2
+
+class HlsDemo
 {
     public static $duration = 3;
 
@@ -58,9 +54,9 @@ class HLSDemo2
         return $pes_header . $payload;
     }
 
-    public static function createPatPacket()
+    public static function createPatPacket($pmtPid)
     {
-        $pat = "\x00\xB0\x0D\x00\x01\xC1\x00\x00\x00\x01\xF0\x01\x2E";
+        $pat = "\x00\xB0\x0D\x00\x01\xC1\x00\x00\x00\x01" . chr($pmtPid >> 8) . chr($pmtPid & 0xFF) . "\x00\x00";
         return str_pad($pat, 188, chr(0xFF));
     }
 
@@ -71,6 +67,12 @@ class HLSDemo2
         $pmt .= "\x1B" . chr($video_pid >> 8) . chr($video_pid & 0xFF) . "\xF0\x00";
         $pmt .= "\x0F" . chr($audio_pid >> 8) . chr($audio_pid & 0xFF) . "\xF0\x00";
         return str_pad($pmt, 188, chr(0xFF));
+    }
+
+    public static function createNitPacket()
+    {
+        $nit = "\x40\xF0\x11\x00\x01\xC1\x00\x00\x00\x01\xC1\x00\x00\x00\x01\xC1\x00\x00";
+        return str_pad($nit, 188, chr(0xFF));
     }
 
     public static function writeTsPacket(int $pid, string $payload, $fileHandle, int &$continuity_counter, int $payload_unit_start_indicator = 0, int $adaptation_field_control = 1)
@@ -99,6 +101,14 @@ class HLSDemo2
         $outputDir = app_path($playStreamPath);
         $segmentDuration = self::$duration;
         $nowTime = time();
+
+        /** 媒体数据key */
+        $mediaPath = $playStreamPath.'_media';
+        /** 切片操作时间key */
+        $lastCutTimeKey = $playStreamPath.'_time';
+        /** 切片目录key */
+        $tsFilesKey = $playStreamPath.'_ts';
+
         Cache::push($playStreamPath, $frame);
         if (Cache::has($playStreamPath)) {
             $lastCutTime = Cache::get($playStreamPath);
@@ -120,43 +130,44 @@ class HLSDemo2
         $tsFile = 'segment' . count($tsFiles) . '.ts';
         $tsFileName = $outputDir . '/' . $tsFile;
         $fileHandle = @fopen($tsFileName, 'wb');
-        $patPacket = self::createPatPacket();
+
+        $patPacket = self::createPatPacket(4096); // PMT 的 PID 设置为 4096
         self::writeTsPacket(0, $patPacket, $fileHandle, $continuity_counter, 1);
-        $pmtPacket = self::createPmtPacket(256, 257, 256);
+
+        $pmtPacket = self::createPmtPacket(256, 256, 257);
         self::writeTsPacket(4096, $pmtPacket, $fileHandle, $continuity_counter, 1);
+
+        $nitPacket = self::createNitPacket();
+        self::writeTsPacket(17, $nitPacket, $fileHandle, $continuity_counter, 1);
+
         foreach ($mediaData as $data) {
             if ($data->FRAME_TYPE == MediaFrame::VIDEO_FRAME) {
-                $pts = $data->timestamp * 90000;
+                $pts = $data->timestamp ; // 确保PTS单位是90kHz
                 $dts = $pts;
                 $videoEs = $data->getAVCPacket()->stream->dump();
                 $videoPes = self::createPesHeader(0xE0, $videoEs, $pts, $dts);
-                self::writeTsPacket(257, $videoPes, $fileHandle, $continuity_counter);
+                self::writeTsPacket(256, $videoPes, $fileHandle, $continuity_counter);
             } elseif ($data->FRAME_TYPE == MediaFrame::AUDIO_FRAME) {
-                $pts = $data->timestamp * 90000;
-                $dts = $pts;
+                $pts = $data->timestamp ; // 确保PTS单位是90kHz
                 $audioEs = $data->getAACPacket()->stream->dump();
-                $audioPes = self::createPesHeader(0xC0, $audioEs, $pts, $dts);
-                self::writeTsPacket(256, $audioPes, $fileHandle, $continuity_counter);
+                $audioPes = self::createPesHeader(0xC0, $audioEs, $pts);
+                self::writeTsPacket(257, $audioPes, $fileHandle, $continuity_counter);
+            } elseif ($data->FRAME_TYPE == MediaFrame::META_FRAME){
+                // 处理META_FRAME数据
+                $metaEs = $data->dump();
+                $metaPes = self::createPesHeader(0xFC, $metaEs, $data->timestamp);
+                self::writeTsPacket(258, $metaPes, $fileHandle, $continuity_counter, 1);
             }
         }
-        /** 关闭ts文件 */
         @fclose($fileHandle);
-        /** 追加到切片文件目录 */
+
         $tsFiles[] = $tsFile;
-        /** 生成索引文件 */
         self::generateM3U8($tsFiles, $outputDir);
-        /** 将目录存入缓存 */
         foreach ($tsFiles as $fileName) {
             Cache::push('ts_' . $playStreamPath, $fileName);
         }
     }
 
-    /**
-     * 生成播放列表索引
-     * @param array $tsFiles ts目录
-     * @param string $outputDir 存放路径
-     * @return void
-     */
     public static function generateM3U8(array $tsFiles, string $outputDir)
     {
         $m3u8Content = "#EXTM3U\n";
@@ -171,5 +182,3 @@ class HLSDemo2
         file_put_contents($outputDir . '/playlist.m3u8', $m3u8Content);
     }
 }
-
-

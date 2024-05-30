@@ -11,6 +11,7 @@ if ($inFileHandle === false) {
 // Prepare parser
 $parser = new \PhpBg\MpegTs\Parser();
 $parser->passthroughAllPids = true;
+
 $tsStats = [];
 $tsCounter = 0;
 $parser->on('error', function ($e) {
