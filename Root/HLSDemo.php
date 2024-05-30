@@ -33,79 +33,35 @@ class HLSDemo
     public static $duration = 3;
 
     /**
-     * 创建ts头
-     * @param int $pid
-     * @param $payload_unit_start_indicator
-     * @param $transport_priority
-     * @param $transport_scrambling_control
-     * @param $adaptation_field_control
-     * @param $continuity_counter
+     * 创建ts包头
+     * @param int $pid 包标识符，用于标识 TS 包的类型，如 PAT、PMT、音频数据、视频数据等
+     * @param int $payload_unit_start_indicator 负载单元起始标识符
+     * @param int $continuity_counter 连续性计数器，用于标识同一个 PID 的 TS 包的连续性
+     * @param int $adaptation_field_control 自适应字段控制，用于指示 TS 包头部是否包含自适应字段，以及如何使用这些字段
      * @return string
-     * @comment 参考 https://blog.csdn.net/m0_37599645/article/details/117135283
      */
-    public static function createTsHeader(int $pid, $payload_unit_start_indicator = 0, $transport_priority = 0, $transport_scrambling_control = 0, $adaptation_field_control = 1, $continuity_counter = 0)
+    public static function createTsHeader(int $pid, $payload_unit_start_indicator = 0, $continuity_counter = 0, $adaptation_field_control = 1)
     {
         $sync_byte = 0x47;
         $header = chr($sync_byte);
-        $header .= chr((($payload_unit_start_indicator << 7) | ($transport_priority << 6) | ($pid >> 8)) & 0xFF);
+        $header .= chr((($payload_unit_start_indicator << 6) | ($pid >> 8)) & 0xFF);
         $header .= chr($pid & 0xFF);
-        $header .= chr((($transport_scrambling_control << 6) | ($adaptation_field_control << 4) | ($continuity_counter & 0x0F)) & 0xFF);
+        $header .= chr(($adaptation_field_control << 4) | ($continuity_counter & 0x0F));
         return $header;
     }
 
     /**
-     * 打包成ts
-     * @param int $pid
-     * @param string $payload
-     * @param $fileHandle
-     * @param int $continuity_counter
-     * @param int $payload_unit_start_indicator
-     * @param int $transport_priority
-     * @param int $transport_scrambling_control
-     * @param int $adaptation_field_control
-     * @return void
-     * @comment 参考 https://blog.csdn.net/m0_37599645/article/details/117135283
-     */
-    public static function writeTsPacket(int $pid, string $payload, $fileHandle, int &$continuity_counter, int $payload_unit_start_indicator = 0, int $transport_priority = 0, int $transport_scrambling_control = 0, int $adaptation_field_control = 1)
-    {
-        $packetSize = 188;
-        $payloadSize = $packetSize - 4; // 4 bytes for TS header
-        $dataLen = strlen($payload);
-        $i = 0;
-        while ($i < $dataLen) {
-            $header = self::createTsHeader($pid, ($i == 0) ? $payload_unit_start_indicator : 0, $transport_priority, $transport_scrambling_control, $adaptation_field_control, $continuity_counter);
-            $continuity_counter = ($continuity_counter + 1) % 16;
-
-            $chunk = substr($payload, $i, $payloadSize);
-            $i += $payloadSize;
-
-            $adaptation_field_length = $packetSize - strlen($header) - strlen($chunk) - 1; // 1 byte for adaptation_field_length
-            $adaptation_field = "\x00"; // Adaptation field length
-
-            if ($adaptation_field_length > 0) {
-                // Padding adaptation field to meet required length
-                $adaptation_field .= str_repeat("\xFF", $adaptation_field_length - 1); // Subtract 1 for adaptation_field_length byte
-                $adaptation_field .= "\x00"; // Discontinuity indicator and random access indicator set to 0
-            }
-
-            $packet = $header . $adaptation_field . $chunk;
-            fwrite($fileHandle, $packet);
-        }
-    }
-
-    /**
-     * 创建pes头
-     * @param $stream_id
-     * @param $payload
-     * @param $pts
-     * @param $dts
+     * 创建pes包头
+     * @param int $stream_id 流 ID，用于标识数据流的类型，如视频、音频等。
+     * @param string $payload 负载数据，即音视频数据。
+     * @param int $pts PTS（Presentation Time Stamp），显示时间戳，用于指定音视频数据的显示时间。
+     * @param int $dts DTS（Decoding Time Stamp），解码时间戳，用于指定音视频数据的解码时间
      * @return string
-     * @comment 参考 https://blog.csdn.net/m0_37599645/article/details/117135283
      */
     public static function createPesHeader($stream_id, $payload, $pts, $dts = null)
     {
         $pes_start_code = "\x00\x00\x01";
-        $pes_packet_length = 3 + 2 + strlen($payload); // header size + payload size
+        $pes_packet_length = 3 + 5 + strlen($payload) + ($dts !== null ? 5 : 0); // header size + payload size
         $flags = 0x80; // '10' for PTS
         $header_data_length = 5; // PTS is always present
         if ($dts !== null) {
@@ -121,94 +77,79 @@ class HLSDemo
         $pes_header .= chr($flags);
         $pes_header .= chr($header_data_length);
 
-        // PTS
-        $pes_header .= chr(0x21 | (($pts >> 29) & 0x0E));
+        $pes_header .= chr(($pts >> 29) & 0x0E | 0x21);
         $pes_header .= chr(($pts >> 22) & 0xFF);
-        $pes_header .= chr(0x01 | (($pts >> 14) & 0xFE));
+        $pes_header .= chr(($pts >> 14) & 0xFE | 0x01);
         $pes_header .= chr(($pts >> 7) & 0xFF);
-        $pes_header .= chr(0x01 | (($pts << 1) & 0xFE));
+        $pes_header .= chr(($pts << 1) & 0xFE | 0x01);
 
-        // DTS
         if ($dts !== null) {
-            $pes_header .= chr(0x11 | (($dts >> 29) & 0x0E));
+            $pes_header .= chr(($dts >> 29) & 0x0E | 0x11);
             $pes_header .= chr(($dts >> 22) & 0xFF);
-            $pes_header .= chr(0x01 | (($dts >> 14) & 0xFE));
+            $pes_header .= chr(($dts >> 14) & 0xFE | 0x01);
             $pes_header .= chr(($dts >> 7) & 0xFF);
-            $pes_header .= chr(0x01 | (($dts << 1) & 0xFE));
+            $pes_header .= chr(($dts << 1) & 0xFE | 0x01);
         }
 
         return $pes_header . $payload;
     }
 
-
-    /** 自适应区的长度要包含传输错误指示符标识的一个字节。pcr 是节目时钟参考，pcr、dts、pts 都是对同
-     * 一个系统时钟的采样值，pcr 是递增的，因此可以将其设置为 dts 值，音频数据不需要 pcr。如果没有字
-     * 段，ipad 是可以播放的，但 vlc 无法播放。打包 ts 流时 PAT 和 PMT 表是没有 adaptation field 的，
-     * 不够的长度直接补 0xff 即可。视频流和音频流都需要加 adaptation field，通常加在一个帧的第一个 ts
-     * 包和最后一个 ts 包中，中间的 ts 包不加。
-     */
-
-
     /**
      * 创建pat节目表
-     * @comment 用来指定pmt的pid
-     * @note 参考 https://blog.csdn.net/m0_37599645/article/details/117135283
+     * @return string
      */
-    public static function createPatPacket(int $pmt_pid)
+    public static function createPatPacket()
     {
-        // PAT table_id = 0x00, section_syntax_indicator = 1, reserved = 3 bits, section_length = 13 bits
-        $pat = "\x00\xB0";
-
-        // section_length, transport_stream_id, reserved, version_number, current_next_indicator, section_number, last_section_number
-        $pat .= "\x00\x0D\x00\x01\xC1\x00\x00";
-
-        // Program_number, reserved, PID
-        $pat .= "\x00\x01" . chr(($pmt_pid >> 8) & 0xFF) . chr($pmt_pid & 0xFF);
-
-        // CRC32 placeholder (4 bytes)
-        $pat .= "\x00\x00\x00\x00";
-
-        // Calculate CRC32
-        $crc = crc32($pat);
-
-        // Append CRC32
-        $pat .= chr(($crc >> 24) & 0xFF) . chr(($crc >> 16) & 0xFF) . chr(($crc >> 8) & 0xFF) . chr($crc & 0xFF);
-
-        // Ensure the PAT packet is 188 bytes long
+        $pat = "\x00\xB0\x0D\x00\x01\xC1\x00\x00\x00\x01\xF0\x01\x2E";
         return str_pad($pat, 188, chr(0xFF));
     }
 
-
     /**
-     * 创建pmt信息流表
-     * 参考 https://blog.csdn.net/m0_37599645/article/details/117135283
+     * pmt信息流表
+     * @param int $pcr_pid
+     * @param int $video_pid
+     * @param int $audio_pid
+     * @return string
      */
-     public static function createPmtPacket(int $pcr_pid, int $video_pid, int $audio_pid)
+    public static function createPmtPacket(int $pcr_pid, int $video_pid, int $audio_pid)
     {
-        // PMT table_id = 0x02, section_syntax_indicator = 1
-        $pmt = "\x02\xB0";
-
-        // section_length (13 bits), program_number, version_number, current_next_indicator, section_number, last_section_number
-        $pmt .= "\x00\x17\x00\x01\xC1\x00\x00";
-
-        // PCR_PID (13 bits), reserved (2 bits), program_info_length
-        $pmt .= chr(($pcr_pid >> 8) & 0xFF) . chr($pcr_pid & 0xFF) . "\xF0\x00";
-
-        // Video stream
+        $pmt = "\x02\xB0\x17\x00\x01\xC1\x00\x00";
+        $pmt .= chr($pcr_pid >> 8) . chr($pcr_pid & 0xFF) . "\xF0\x00";
         $pmt .= "\x1B" . chr($video_pid >> 8) . chr($video_pid & 0xFF) . "\xF0\x00";
-
-        // Audio stream
         $pmt .= "\x0F" . chr($audio_pid >> 8) . chr($audio_pid & 0xFF) . "\xF0\x00";
-
-        // CRC32 placeholder (4 bytes)
-        $pmt .= "\x00\x00\x00\x00";
-
-        // Ensure the PMT packet is 188 bytes long
         return str_pad($pmt, 188, chr(0xFF));
     }
 
+    /**
+     * 生成ts包
+     * @param int $pid
+     * @param string $payload
+     * @param resource $fileHandle
+     * @param int $continuity_counter
+     * @param int $payload_unit_start_indicator
+     * @param int $adaptation_field_control
+     * @return void
+     */
+    public static function writeTsPacket(int $pid, string $payload, $fileHandle, int &$continuity_counter,  int $payload_unit_start_indicator = 0, int $adaptation_field_control = 1)
+    {
+        $packetSize = 188;
+        $payloadSize = $packetSize - 4; // 4 bytes for TS header
+        $dataLen = strlen($payload);
+        $i = 0;
+        while ($i < $dataLen) {
+            $header = self::createTsHeader($pid, ($i == 0) ? $payload_unit_start_indicator : 0, $continuity_counter, $adaptation_field_control);
+            $continuity_counter = ($continuity_counter + 1) % 16;
 
+            $chunk = substr($payload, $i, $payloadSize);
+            $i += $payloadSize;
 
+            if (strlen($chunk) < $payloadSize) {
+                $chunk = str_pad($chunk, $payloadSize, chr(0xFF));
+            }
+            $packet = $header . $chunk;
+            fwrite($fileHandle, $packet);
+        }
+    }
 
     /**
      * hls协议入口
@@ -257,14 +198,14 @@ class HLSDemo
         /** 打开切片文件 */
         $fileHandle = @fopen($tsFileName, 'wb');
         /*--------------------------------------------------------------------------------*/
-        // todo 修正写入pat包和pmt包这里 现在被写入了两个pat和两个pmt 导致无法播放
-        /** 先创建pat表 PAT（Program Association Table）节目关联表：主要的作用就是指明了 PMT 表的 PID 值。*/
-        $patPacket = self::createPatPacket(17);
+        //todo 问题出在写入pat包和pmt包这里。参考 https://blog.csdn.net/m0_37599645/article/details/117135283
+        /** 先创建pat表 */
+        $patPacket = self::createPatPacket();
+        /** 写入pat表数据 */
         self::writeTsPacket(0, $patPacket, $fileHandle, $continuity_counter, 1);
-        /**  PMT（Program Map Table）节目映射表：主要的作用就是指明了音视频流的 PID 值 视频的pid是256，音频的pid257 一般使用视频的pid作为pcr_id*/
-        /** 在 MPEG-TS 流中，PCR（Program Clock Reference）是一个重要的时间基准，用于同步解码过程中的音视频数据。通常，PCR PID 被设置为视频流的 PID，因为视频流通常有更稳定和精确的时间戳。 */
-        /** pcr 是节目时钟参考，pcr、dts、pts 都是对同一个系统时钟的采样值，pcr 是递增的，因此可以将其设置为 dts 值，音频数据不需要 pcr。*/
-        $pmtPacket = self::createPmtPacket(256, 256, 257);
+        /** 创建pmt表 有问题*/
+        $pmtPacket = self::createPmtPacket(256, 257, 256);
+        /** 写入pmt数据 */
         self::writeTsPacket(4096, $pmtPacket, $fileHandle, $continuity_counter, 1);
         /*--------------------------------------------------------------------------------------*/
         /** 循环处理媒体数据 */
