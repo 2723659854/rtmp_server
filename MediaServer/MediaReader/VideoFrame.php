@@ -133,6 +133,15 @@ class VideoFrame extends BinaryStream implements MediaFrame
     }
 
     /**
+     * 是否是音频数据
+     * @return false
+     */
+    public function isAudio()
+    {
+        return false;
+    }
+
+    /**
      * 销毁数据包
      * @return void
      */

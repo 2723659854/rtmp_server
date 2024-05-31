@@ -173,17 +173,18 @@ class HlsDemo2
         /** 遍历所有媒体数据 */
         foreach ($mediaData as $frame) {
             /** 判断帧类型 */
-            if ($frame->FRAME_TYPE == MediaFrame::AUDIO_FRAME) {
+            if ($frame->isAudio()) {
                 $pid = 257;
                 $stream_id = 0xC0; // 音频流ID
-                $pesPacket = self::createPes($stream_id, $frame->getAACPacket()->stream->dump(), $frame->timestamp, $frame->timestamp);
             } else {
                 $pid = 256;
                 $stream_id = 0xE0; // 视频流ID
-                $pesPacket = self::createPes($stream_id, $frame->getAVCPacket()->stream->dump(), $frame->timestamp, $frame->timestamp);
             }
+            /** 创建pes包 */
+            $pesPacket = self::createPes($stream_id, $frame->getPayload(), $frame->pts, $frame->dts);
             /** 写入ts文件 */
             self::writeTsPacket($pid, $pesPacket, $fileHandle, $continuity_counter, 1);
+
         }
         /** 关闭ts文件 */
         fclose($fileHandle);
