@@ -1,17 +1,19 @@
 <?php
 
+
 namespace Root;
 
 use MediaServer\MediaReader\AudioFrame;
 use MediaServer\MediaReader\VideoFrame;
+
 class HlsDemo3
 {
-    private  static  $tsBuffer = ''; // 用于存储 TS 数据的缓冲区
-    private  static $timestamp = 0; // 时间戳，用于计算 PTS 和 DTS
-    private  static $videoPID = 256; // 视频流的 PID
-    private  static $audioPID = 257; // 音频流的 PID
-    private  static $tsIndex = 0; // TS 文件索引
-    private  static $segmentDuration = 3000; // 每段 TS 文件的持续时间（单位：毫秒）
+    private static $tsBuffer = ''; // 用于存储 TS 数据的缓冲区
+    private static $lastTimestamp = 0; // 上一个 TS 文件生成的时间点
+    private static $videoPID = 256; // 视频流的 PID
+    private static $audioPID = 257; // 音频流的 PID
+    private static $tsIndex = 0; // TS 文件索引
+    private static $segmentDuration = 3000; // 每段 TS 文件的持续时间（单位：毫秒）
 
     public static function make($data)
     {
@@ -24,31 +26,28 @@ class HlsDemo3
             self::processVideoFrame($data);
         }
 
-        // 累加时间戳
-        self::$timestamp += $data->timestamp;
-
         // 判断是否满足生成 TS 文件的条件（每隔3秒生成一个 TS 文件）
-        if (self::$timestamp >= self::$segmentDuration) {
+        if ($data->timestamp - self::$lastTimestamp >= self::$segmentDuration) {
             self::generateTSFile();
-            self::resetTimestamp();
+            self::resetTimestamp($data->timestamp);
         }
     }
 
-    private static  function processAudioFrame(AudioFrame $audioFrame)
+    private static function processAudioFrame(AudioFrame $audioFrame)
     {
         // 生成音频 PES 包
         $audioPESPacket = self::generatePESPacket($audioFrame, self::$audioPID);
         self::$tsBuffer .= $audioPESPacket;
     }
 
-    private static  function processVideoFrame(VideoFrame $videoFrame)
+    private static function processVideoFrame(VideoFrame $videoFrame)
     {
         // 生成视频 PES 包
         $videoPESPacket = self::generatePESPacket($videoFrame, self::$videoPID);
         self::$tsBuffer .= $videoPESPacket;
     }
 
-    private static  function generatePESPacket($frame, $pid)
+    private static function generatePESPacket($frame, $pid)
     {
         // 生成 PES 头部
         $pesHeader = "\x00\x00\x01";
@@ -81,29 +80,33 @@ class HlsDemo3
         return $tsPacket;
     }
 
-    private static  function generateTSPacket($payload, $pid)
+    private static function generateTSPacket($payload, $pid)
     {
-        // TS packet数据包格式：固定字段 + payload长度（不超过184字节）
+        $tsPackets = '';
+        $payloadLen = strlen($payload);
+        $continuityCounter = 0;
 
-        // TS header
-        $tsHeader = "\x47"; // Sync byte
-        $tsHeader .= pack('n', 0x4000 | $pid); // Payload unit start indicator (1 bit), PID (13 bits)
-        $tsHeader .= "\x00"; // Continuity counter (4 bits), Adaptation field control (2 bits), Payload unit start indicator (1 bit)
+        for ($i = 0; $i < $payloadLen; $i += 184) {
+            $tsHeader = "\x47"; // Sync byte
+            $tsHeader .= pack('n', ($i == 0 ? 0x4000 : 0x0000) | $pid); // Payload unit start indicator (1 bit), PID (13 bits)
+            $tsHeader .= chr($continuityCounter++ & 0x0F); // Continuity counter (4 bits)
 
-        // Payload
-        $payloadSize = min(strlen($payload), 184 - 4); // Payload最大长度为184字节减去固定字段长度
-        $tsPacket = $tsHeader . substr($payload, 0, $payloadSize);
+            $payloadChunk = substr($payload, $i, 184);
+            $tsPacket = $tsHeader . $payloadChunk;
 
-        // 如果payload不足188字节，补充填充数据
-        $paddingSize = 188 - strlen($tsPacket);
-        if ($paddingSize > 0) {
-            $tsPacket .= str_repeat("\xFF", $paddingSize); // 使用0xFF进行填充
+            // 如果payload不足188字节，补充填充数据
+            $paddingSize = 188 - strlen($tsPacket);
+            if ($paddingSize > 0) {
+                $tsPacket .= str_repeat("\xFF", $paddingSize); // 使用0xFF进行填充
+            }
+
+            $tsPackets .= $tsPacket;
         }
 
-        return $tsPacket;
+        return $tsPackets;
     }
 
-    private static  function generateTSFile()
+    private static function generateTSFile()
     {
         // 生成 PAT 和 PMT 表
         $patPacket = self::generatePAT();
@@ -113,7 +116,7 @@ class HlsDemo3
         $tsData = $patPacket . $pmtPacket . self::$tsBuffer;
 
         // 写入 TS 文件
-        $tsFilename = app_path('/a/b')."/segment".self::$tsIndex.".ts";
+        $tsFilename = app_path('/a/b') . "/segment" . self::$tsIndex . ".ts";
         file_put_contents($tsFilename, $tsData);
 
         // 更新索引文件
@@ -124,7 +127,7 @@ class HlsDemo3
         self::$tsIndex++;
     }
 
-    private static  function generatePAT()
+    private static function generatePAT()
     {
         // PAT 表头部
         $patHeader = "\x00\x00\xB0\x0D"; // Table ID, section syntax indicator, section length
@@ -141,7 +144,7 @@ class HlsDemo3
         return self::generateTSPacket($patHeader, 0);
     }
 
-    private static  function generatePMT()
+    private static function generatePMT()
     {
         // PMT 表头部
         $pmtHeader = "\x02\x00\xB0\x17"; // Table ID, section syntax indicator, section length
@@ -168,22 +171,33 @@ class HlsDemo3
         return self::generateTSPacket($pmtHeader, 4096);
     }
 
-    private static  function updateM3U8File($tsFilename)
+    private static function updateM3U8File($tsFilename)
     {
-        $m3u8Content = "#EXTM3U\n";
-        $m3u8Content .= "#EXT-X-VERSION:3\n";
-        $m3u8Content .= "#EXT-X-TARGETDURATION:3\n";
-        $m3u8Content .= "#EXT-X-MEDIA-SEQUENCE:{self::tsIndex}\n";
+        $m3u8FilePath = app_path('/a/b') . '/playlist.m3u8';
+        $m3u8Content = '';
+
+        // 如果文件存在，读取现有内容
+        if (file_exists($m3u8FilePath)) {
+            $m3u8Content = file_get_contents($m3u8FilePath);
+        } else {
+            // 初始化 M3U8 文件头
+            $m3u8Content = "#EXTM3U\n";
+            $m3u8Content .= "#EXT-X-VERSION:3\n";
+            $m3u8Content .= "#EXT-X-TARGETDURATION:3\n";
+            $m3u8Content .= "#EXT-X-MEDIA-SEQUENCE:0\n";
+        }
+
+        // 追加新的 TS 文件信息
         $m3u8Content .= "#EXTINF:3.0,\n";
-        $m3u8Content .= "{$tsFilename}\n";
+        $m3u8Content .= basename($tsFilename) . "\n";
 
         // 写入索引文件
-        file_put_contents(app_path('/a/b').'/playlist.m3u8', $m3u8Content);
+        file_put_contents($m3u8FilePath, $m3u8Content);
     }
 
-    private static  function resetTimestamp()
+    private static function resetTimestamp($timestamp)
     {
         // 重置时间戳
-        self::$timestamp = 0;
+        self::$lastTimestamp = $timestamp;
     }
 }
