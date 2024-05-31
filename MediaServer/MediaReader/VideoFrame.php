@@ -76,6 +76,8 @@ class VideoFrame extends BinaryStream implements MediaFrame
         return self::VIDEO_CODEC_NAME[$this->codecId];
     }
 
+    public $pts;
+    public $dts;
 
     /** 初始化视频编码格式 */
     public function __construct($data, $timestamp = 0)
@@ -88,6 +90,11 @@ class VideoFrame extends BinaryStream implements MediaFrame
         /** 类型和编码都是使用掩码计算的 */
         $this->frameType = $firstByte >> 4;
         $this->codecId = $firstByte & 15;
+
+        // 假设视频帧没有B帧，PTS等于DTS
+        $this->pts = $this->timestamp;
+        $this->dts = $this->timestamp;
+
     }
 
 
@@ -108,6 +115,21 @@ class VideoFrame extends BinaryStream implements MediaFrame
         }
 
         return $this->avcPacket;
+    }
+
+    /**
+     * 获取视频帧的 payload 数据
+     * @param int $length 要读取的 payload 数据长度，默认为0，表示读取全部数据
+     * @return string 返回读取的 payload 数据
+     */
+    public function getPayload($length = 0)
+    {
+        // 如果未指定长度，则读取全部数据
+        if ($length === 0) {
+            return $this->readRaw();
+        } else {
+            return $this->readRaw($length);
+        }
     }
 
     /**

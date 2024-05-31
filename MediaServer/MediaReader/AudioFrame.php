@@ -52,6 +52,9 @@ class AudioFrame extends BinaryStream implements MediaFrame
     public $timestamp = 0;
 
 
+    public $pts = 0;
+
+    public $dts = 0;
 
     /**
      * 初始化
@@ -75,11 +78,51 @@ class AudioFrame extends BinaryStream implements MediaFrame
         /** 音频类别 */
         $this->soundType = $firstByte & 1;
 
+        $this->pts = $this->timestamp;
+        $this->dts = $this->timestamp;
+    }
+
+    /**
+     * 获取毫秒pts,dts
+     * @return float[]|int[]
+     */
+    public function getPtsAndDts()
+    {
+        // 如果需要将时间戳转换为毫秒单位，可以使用采样率进行计算
+        $samplerate = $this->getAudioSamplerate();
+        $ptsMilliseconds = $this->pts / $samplerate * 1000;
+        $dtsMilliseconds = $this->dts / $samplerate * 1000;
+
+        return ['pts'=>$ptsMilliseconds,'dts'=>$dtsMilliseconds];
+    }
+
+    /**
+     * 是否是音频数据
+     * @return true
+     */
+    public function isAudio()
+    {
+        return true;
     }
 
     public function __toString()
     {
         return $this->dump();
+    }
+
+    /**
+     * 获取音频帧的 payload 数据
+     * @param int $length 要读取的 payload 数据长度，默认为0，表示读取全部数据
+     * @return string 返回读取的 payload 数据
+     */
+    public function getPayload($length = 0)
+    {
+        // 如果未指定长度，则读取全部数据
+        if ($length === 0) {
+            return $this->readRaw();
+        } else {
+            return $this->readRaw($length);
+        }
     }
 
     /**
