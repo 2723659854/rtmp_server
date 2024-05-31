@@ -82,8 +82,6 @@ VOLUME /usr/src/myapp
 EXPOSE 8080
 EXPOSE 6379
 # 需要执行的命令
-#CMD [ "pwd" ]
-#CMD [ "cd webman" ]
 #CMD [ "php", "./start.php start" ]
 # 覆盖启动命令，不再直接启动服务器，而是用一个空进程维持容器运行
 # 指定退出命令
