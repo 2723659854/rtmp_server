@@ -9,50 +9,8 @@ class HlsDemo2
 {
     /** 切片时间 3秒 */
     public static $duration = 3;
-    public static function createPes($stream_id, $payload, $pts, $dts = null)
-    {
-        $pes_start_code = "\x00\x00\x01";
-        $flags = 0x80; // PTS only
-        $header_data_length = 5; // PTS length
-        if ($dts !== null) {
-            $flags |= 0x40; // DTS
-            $header_data_length += 5; // PTS + DTS length
-        }
 
-        // PES packet length
-        $pes_packet_length = 3 + $header_data_length + strlen($payload);
 
-        // PES header
-        $pes_header = $pes_start_code;
-        $pes_header .= chr($stream_id);
-        if ($pes_packet_length > 0xFFFF) {
-            $pes_header .= "\x00\x00";
-        } else {
-            $pes_header .= chr(($pes_packet_length >> 8) & 0xFF);
-            $pes_header .= chr($pes_packet_length & 0xFF);
-        }
-        $pes_header .= chr(0x80); // '10' + PES_scrambling_control (2 bits) + PES_priority (1 bit) + data_alignment_indicator (1 bit) + copyright (1 bit) + original_or_copy (1 bit)
-        $pes_header .= chr($flags);
-        $pes_header .= chr($header_data_length);
-
-        // Write PTS
-        $pes_header .= chr((($pts >> 29) & 0x0E) | 0x21);
-        $pes_header .= chr(($pts >> 22) & 0xFF);
-        $pes_header .= chr((($pts >> 14) & 0xFE) | 0x01);
-        $pes_header .= chr(($pts >> 7) & 0xFF);
-        $pes_header .= chr((($pts << 1) & 0xFE) | 0x01);
-
-        // Write DTS if available
-        if ($dts !== null) {
-            $pes_header .= chr((($dts >> 29) & 0x0E) | 0x11);
-            $pes_header .= chr(($dts >> 22) & 0xFF);
-            $pes_header .= chr((($dts >> 14) & 0xFE) | 0x01);
-            $pes_header .= chr(($dts >> 7) & 0xFF);
-            $pes_header .= chr((($dts << 1) & 0xFE) | 0x01);
-        }
-
-        return $pes_header . $payload;
-    }
     public static function writeTsPacket(int $pid, string $payload, $fileHandle, int &$continuity_counter, int $payload_unit_start_indicator = 0, int $adaptation_field_control = 1)
     {
         $packetSize = 188;
@@ -113,6 +71,14 @@ class HlsDemo2
 
     public static function make(MediaFrame $frame, string $playStreamPath)
     {
+        // 修正音频流的标识符
+        $streamId = 0xC1; // AAC 音频流ID
+
+        // 修改音频流参数（假设 AAC 编码，48kHz 采样率，立体声声道）
+        $audioCodec = 0x0F; // MPEG-4 AAC
+        $audioSampleRate = 0x03; // 48kHz
+        $audioChannelConfig = 0x02; // 立体声
+
         /** ts存放路径 */
         $outputDir = app_path($playStreamPath);
         /** 切片时间 */
@@ -175,16 +141,23 @@ class HlsDemo2
             /** 判断帧类型 */
             if ($frame->isAudio()) {
                 $pid = 257;
-                $stream_id = 0xC0; // 音频流ID
+                $stream_id = $streamId; // 音频流ID
+
+                // 创建 AAC PES 包
+                $pesPayload = self::createAacPesPayload($frame->getPayload(), $frame->pts, $frame->dts, $audioCodec, $audioSampleRate, $audioChannelConfig);
             } else {
                 $pid = 256;
                 $stream_id = 0xE0; // 视频流ID
+
+                // 创建 H.264 PES 包
+                $pesPayload = self::createH264PesPayload($frame->getPayload(), $frame->pts, $frame->dts);
             }
-            /** 创建pes包 */
-            $pesPacket = self::createPes($stream_id, $frame->getPayload(), $frame->pts, $frame->dts);
+
+            // 创建 PES 包
+            $pesPacket = self::createPes($stream_id, $pesPayload, $frame->pts, $frame->dts);
+
             /** 写入ts文件 */
             self::writeTsPacket($pid, $pesPacket, $fileHandle, $continuity_counter, 1);
-
         }
         /** 关闭ts文件 */
         fclose($fileHandle);
@@ -193,12 +166,71 @@ class HlsDemo2
         /** 生成索引文件 */
         self::generateM3U8($tsFiles, $outputDir);
         /** 将目录重新存入到缓存 */
-        foreach ($tsFiles as $fileName) {
-            Cache::push($tsFilesKey, $fileName);
+        foreach ($tsFiles as $fileName) {            Cache::push($tsFilesKey, $fileName);
         }
     }
 
     /**
+     * 创建 AAC PES 包
+     */
+    private static function createAacPesPayload(string $payload, int $pts, int $dts, int $audioCodec, int $audioSampleRate, int $audioChannelConfig): string
+    {
+        // AAC 视频流描述字节
+        $adtsHeader = pack('C', 0xFF) . // syncword: 12 bits
+            pack('C', 0xF1) . // syncword extension: 3 bits, ID: 1 bit, layer: 2 bits, protection absent: 1 bit
+            pack('C', 0x40 | (($audioCodec - 1) << 2) | (($audioSampleRate >> 1) & 0x03)) . // profile: 2 bits, sampling frequency index: 4 bits, private bit: 1 bit, channel configuration: 3 bits
+            pack('C', (($audioSampleRate << 7) & 0x80) | (($audioChannelConfig & 0x0F) << 3)) . // channel configuration (cont'd): 4 bits, original: 1 bit, home: 1 bit
+            pack('n', strlen($payload) + 7); // size of the packet (including the header)
+
+        // PTS 和 DTS 字节
+        $ptsDtsBytes = pack('CC', 0x80 | (($pts >> 29) & 0x07), (($pts >> 22) & 0xFF)) . // PTS
+            pack('CC', (($pts >> 14) & 0xFF) | 0x01, (($pts >> 7) & 0xFF)) . // PTS
+            pack('CC', (($pts << 1) & 0xFE) | 0x01, 0x80) . // PTS
+            pack('CC', 0x80 | (($dts >> 29) & 0x07), (($dts >> 22) & 0xFF)) . // DTS
+            pack('CC', (($dts >> 14) & 0xFF) | 0x01, (($dts >> 7) & 0xFF)) . // DTS
+            pack('CC', (($dts << 1) & 0xFE) | 0x01, 0x80); // DTS
+
+        // AAC 数据
+        $aacPayload = $adtsHeader . $ptsDtsBytes . $payload;
+
+        return $aacPayload;
+    }
+
+    /**
+     * 创建 H.264 PES 包
+     */
+    private static function createH264PesPayload(string $payload, int $pts, int $dts): string
+    {
+        // PTS 和 DTS 字节
+        $ptsDtsBytes = pack('CC', 0x80 | (($pts >> 29) & 0x07), (($pts >> 22) & 0xFF)) . // PTS
+            pack('CC', (($pts >> 14) & 0xFF) | 0x01, (($pts >> 7) & 0xFF)) . // PTS
+            pack('CC', (($pts << 1) & 0xFE) | 0x01, 0x80) . // PTS
+            pack('CC', 0x80 | (($dts >> 29) & 0x07), (($dts >> 22) & 0xFF)) . // DTS
+            pack('CC', (($dts >> 14) & 0xFF) | 0x01, (($dts >> 7) & 0xFF)) . // DTS
+            pack('CC', (($dts << 1) & 0xFE) | 0x01, 0x80); // DTS
+
+        // H.264 数据
+        $h264Payload = $ptsDtsBytes . $payload;
+
+        return $h264Payload;
+    }
+
+    /**
+     * 创建 PES 包
+     */
+    private static function createPes(int $stream_id, string $payload, int $pts, int $dts): string
+    {
+        $stream_id_flag = pack('C', $stream_id);
+        $PES_packet_length = pack('n', strlen($payload) + 13);
+        $PTS_DTS_flags = pack('C', 0x80 | 0x40 | 0x20); // PTS and DTS flags
+        $PES_header_data_length = pack('C', 10);
+
+        return $stream_id_flag . $PES_packet_length . $PTS_DTS_flags . $PES_header_data_length . $payload;
+    }
+
+
+
+/**
      * 生成索引文件
      * @param array $tsFiles
      * @param string $outputDir
