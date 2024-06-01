@@ -278,7 +278,7 @@ class HlsDemo
 
     /**
      * 创建 H.264 PES 包
-     *
+     * @comment 这个函数可能有问题，缺少了视频帧处理的控制参数，可能是宽，高，解码器，码率，导致生成的ts文件无法识别视频数据
      */
     private static function createH264PesPayload(string $payload, int $pts, int $dts): string
     {
