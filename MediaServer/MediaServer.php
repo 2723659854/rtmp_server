@@ -8,12 +8,8 @@ use MediaServer\MediaReader\MediaFrame;
 use MediaServer\PushServer\PlayStreamInterface;
 use MediaServer\PushServer\PublishStreamInterface;
 use MediaServer\PushServer\VerifyAuthStreamInterface;
-use MediaServer\Rtmp\RtmpChunk;
-use MediaServer\Rtmp\RtmpPacket;
 use Root\HLSDemo;
-use Root\HlsDemo2;
-use Root\HlsDemo3;
-use Root\HlsDemo4;
+
 
 /**
  * @purpose 媒体中心服务
@@ -121,7 +117,6 @@ class MediaServer
     {
         /** 清除ts文件缓存，防止重新开播的时候还有上一次直播的数据 */
         HLSDemo::close($path);
-        HLSDemo4::close($path);
         unset(self::$publishStream[$path]);
     }
 
@@ -202,10 +197,7 @@ class MediaServer
     static function publisherOnFrame(MediaFrame $frame, PublishStreamInterface $publisher)
     {
         //todo 在这里转换hls协议 ,生成索引文件和切片文件，需要调试
-        //HLSDemo::make($frame,$publisher->getPublishPath());
-        //HlsDemo2::make($frame,$publisher->getPublishPath());
-        //HlsDemo3::make($frame,$publisher->getPublishPath());
-        HlsDemo4::make($frame,$publisher->getPublishPath());
+        HLSDemo::make($frame,$publisher->getPublishPath());
         /** 获取这个媒体路径下的所有播放设备 */
         foreach (self::getPlayStreams($publisher->getPublishPath()) as $playStream) {
             /** 如果播放器不是空闲状态 */
