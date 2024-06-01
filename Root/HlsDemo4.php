@@ -10,6 +10,15 @@ class HlsDemo4
 
     private static $timebase = 90000; // MPEG-TS time base is 90 kHz
 
+    /**
+     * 创建pes包
+     * @param int $stream_id
+     * @param string $payload
+     * @param int $pts
+     * @param int $dts
+     * @return string
+     * @comment  是在音视频数据上加了时间戳等对数据帧的说明信息。就是在es包上加上时间戳
+     */
     private static function createPes(int $stream_id, string $payload, int $pts, int $dts): string
     {
         $pesHeader = "\x00\x00\x01" . chr($stream_id);
@@ -29,6 +38,16 @@ class HlsDemo4
     }
 
 
+    /**
+     * 写入ts包
+     * @param int $pid
+     * @param string $payload
+     * @param $fileHandle
+     * @param int $continuity_counter
+     * @param int $payload_unit_start_indicator
+     * @param int $adaptation_field_control
+     * @comment 是在 pes 层的基础上加入数据流的识别和传输必须的信息。使用pid识别
+     */
     public static function writeTsPacket(int $pid, string $payload, $fileHandle, int &$continuity_counter, int $payload_unit_start_indicator = 0, int $adaptation_field_control = 1)
     {
         $packetSize = 188;
@@ -54,6 +73,12 @@ class HlsDemo4
         }
     }
 
+    /**
+     * 创建节目表
+     * @param $pmtPid
+     * @return string
+     * @comment 主要的作用就是指明了 PMT 表的 PID 值。
+     */
     public static function createPatPacket($pmtPid)
     {
         $pat = "\x00\xB0\x0D\x00\x01\xC1\x00\x00\x00\x01" . chr($pmtPid >> 8) . chr($pmtPid & 0xFF) . "\x00\x00";
@@ -61,6 +86,14 @@ class HlsDemo4
         return str_pad($pat, 188, chr(0xFF));
     }
 
+    /**
+     * 创建pmt表
+     * @param int $pcr_pid
+     * @param int $video_pid
+     * @param int $audio_pid
+     * @return string
+     * @comment 主要的作用就是指明了音视频流的 PID 值
+     */
     public static function createPmtPacket(int $pcr_pid, int $video_pid, int $audio_pid)
     {
         $pmt = "\x02\xB0\x17\x00\x01\xC1\x00\x00";
@@ -71,6 +104,11 @@ class HlsDemo4
         return str_pad($pmt, 188, chr(0xFF));
     }
 
+    /**
+     * 创建nit表
+     * @return string
+     * @comment 创建符合MPEG标准的网络信息表，NIT用于描述和指导整个传输系统的网络信息
+     */
     public static function createNitPacket()
     {
         $nit = "\x40\xF0\x11\x00\x01\xC1\x00\x00\x00\x01\xC1\x00\x00\x00\x01\xC1\x00\x00";
@@ -78,6 +116,14 @@ class HlsDemo4
         return str_pad($nit, 188, chr(0xFF));
     }
 
+    /**
+     * 创建ts文件的头
+     * @param int $pid
+     * @param int $payload_unit_start_indicator
+     * @param int $continuity_counter
+     * @param int $adaptation_field_control
+     * @return string
+     */
     public static function createTsHeader(int $pid, $payload_unit_start_indicator = 0, $continuity_counter = 0, $adaptation_field_control = 1)
     {
         $sync_byte = 0x47;
@@ -88,6 +134,11 @@ class HlsDemo4
         return $header;
     }
 
+    /**
+     * 协议入口
+     * @param MediaFrame $frame 传入视频帧或者视频帧
+     * @param string $playStreamPath 播放路径
+     */
     public static function make(MediaFrame $frame, string $playStreamPath)
     {
         // 修正音频流的标识符
@@ -150,7 +201,7 @@ class HlsDemo4
         $patPacket = self::createPatPacket(4096); // PMT 的 PID 设置为 4096
         self::writeTsPacket(0, $patPacket, $fileHandle, $continuity_counter, 1);
         /** 写入pmt包，指定视频和音频的pid */
-        $pmtPacket = self::createPmtPacket(4096, 256, 257);
+        $pmtPacket = self::createPmtPacket(256, 256, 257);
         self::writeTsPacket(4096, $pmtPacket, $fileHandle, $continuity_counter, 1);
         /** 写入nit包，描述网络信息 */
         $nitPacket = self::createNitPacket();
@@ -161,7 +212,6 @@ class HlsDemo4
             if ($frame->isAudio()) {
                 $pid = 257;
                 $stream_id = $streamId; // 音频流ID
-
                 // 创建 AAC PES 包
                 $pesPayload = self::createAacPesPayload($frame->getPayload(), $frame->pts, $frame->dts, $audioCodec, $audioSampleRate, $audioChannelConfig);
             } else {
