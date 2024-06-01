@@ -119,7 +119,9 @@ class MediaServer
      */
     static protected function delPublishStream($path)
     {
+        /** 清除ts文件缓存，防止重新开播的时候还有上一次直播的数据 */
         HLSDemo::close($path);
+        HLSDemo4::close($path);
         unset(self::$publishStream[$path]);
     }
 

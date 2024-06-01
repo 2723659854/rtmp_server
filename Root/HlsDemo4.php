@@ -359,4 +359,22 @@ class HlsDemo4
         }
         return $crc & 0xFFFFFFFF;
     }
+
+    /**
+     * 清空数据
+     * @param string $playStreamPath
+     * @return void
+     */
+    public static function close(string $playStreamPath)
+    {
+        /** 媒体数据key */
+        $mediaKey = $playStreamPath . '_media';
+        Cache::clear($mediaKey);
+        /** 切片操作时间key */
+        $lastCutTimeKey = $playStreamPath . '_time';
+        Cache::clear($lastCutTimeKey);
+        /** 切片目录key */
+        $tsFilesKey = $playStreamPath . '_ts';
+        Cache::clear($tsFilesKey);
+    }
 }
