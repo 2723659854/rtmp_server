@@ -84,7 +84,7 @@ class VideoFrame extends BinaryStream implements MediaFrame
     {
         /** 装载数据 方便对数据的读取 */
         parent::__construct($data);
-        /** 时间戳 */
+        /** 时间戳 这个是dts */
         $this->timestamp = $timestamp;
         $firstByte = $this->readTinyInt();
         /** 类型和编码都是使用掩码计算的 */

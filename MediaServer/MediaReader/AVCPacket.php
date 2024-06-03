@@ -41,6 +41,7 @@ class AVCPacket
         $this->stream=$stream;
         /** 视频数据包编码格式 */
         $this->avcPacketType=$stream->readTinyInt();
+        //todo 这个合成时间戳很重要 后面转换为hls协议需要用到
         /** compositionTime校正时间 = pts显示时间戳 - dts校正时间戳 */
         $this->compositionTime=$stream->readInt24();
     }
