@@ -92,7 +92,7 @@ class VideoFrame extends BinaryStream implements MediaFrame
         $this->codecId = $firstByte & 15;
 
         // 假设视频帧没有B帧，PTS等于DTS
-        $this->pts = $this->timestamp;
+
         $this->dts = $this->timestamp;
 
     }
@@ -112,6 +112,7 @@ class VideoFrame extends BinaryStream implements MediaFrame
     {
         if (!$this->avcPacket) {
             $this->avcPacket = new AVCPacket($this);
+            $this->pts = $this->timestamp + $this->avcPacket->compositionTime;
         }
 
         return $this->avcPacket;
