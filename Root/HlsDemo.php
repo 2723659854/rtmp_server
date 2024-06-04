@@ -133,7 +133,6 @@ class HlsDemo
     }
 
 
-
     /**
      * 协议入口
      * @param MediaFrame $frame
@@ -227,7 +226,7 @@ class HlsDemo
                 self::writeTsPacket($pid, $pesPacket, $fileHandle, $audio_continuity_counter, 1);
             } else {
                 $packet = $frame->getAVCPacket();
-                $compositionTime=$packet->compositionTime;
+                $compositionTime = $packet->compositionTime;
                 $pts = $frame->timestamp + $compositionTime;
                 $pid = 256;
                 $stream_id = 0xE0; // 视频流ID
@@ -254,7 +253,7 @@ class HlsDemo
     /**
      * 创建 AAC PES 包
      */
-    private static function createAacPesPayload(string $payload, int $pts, int $dts, int $audioCodec, int $audioSampleRate, int $audioChannelConfig): string
+    private static function createAacPesPayload2(string $payload, int $pts, int $dts, int $audioCodec, int $audioSampleRate, int $audioChannelConfig): string
     {
         // AAC 视频流描述字节
         $adtsHeader = pack('C', 0xFF) . // syncword: 12 bits
@@ -280,17 +279,34 @@ class HlsDemo
 
     /**
      * 创建 H.264 PES 包
-     * @comment 这个函数可能有问题，缺少了视频帧处理的控制参数，可能是宽，高，解码器，码率，导致生成的ts文件无法识别视频数据
      */
-    private static function createH264PesPayload(string $payload, int $pts, int $dts): string
+    private static function createH264PesPayload2(string $payload, int $pts, int $dts): string
     {
         // PTS 和 DTS 字节
-        $ptsDtsBytes = pack('CC', 0x80 | (($pts >> 29) & 0x07), (($pts >> 22) & 0xFF)) . // PTS
-            pack('CC', (($pts >> 14) & 0xFF) | 0x01, (($pts >> 7) & 0xFF)) . // PTS
-            pack('CC', (($pts << 1) & 0xFE) | 0x01, 0x80) . // PTS
-            pack('CC', 0x80 | (($dts >> 29) & 0x07), (($dts >> 22) & 0xFF)) . // DTS
-            pack('CC', (($dts >> 14) & 0xFF) | 0x01, (($dts >> 7) & 0xFF)) . // DTS
-            pack('CC', (($dts << 1) & 0xFE) | 0x01, 0x80); // DTS
+        $ptsDtsBytes = pack(
+                'CCC',
+                0x21 | ((($pts >> 30) & 0x07) << 1) | 1,
+                ($pts >> 22) & 0xFF,
+                ((($pts >> 15) & 0x7F) << 1) | 1
+            ) .
+            pack(
+                'CCC',
+                ($pts >> 7) & 0xFF,
+                (($pts & 0x7F) << 1) | 1,
+                0x01
+            ) .
+            pack(
+                'CCC',
+                0x11 | ((($dts >> 30) & 0x07) << 1) | 1,
+                ($dts >> 22) & 0xFF,
+                ((($dts >> 15) & 0x7F) << 1) | 1
+            ) .
+            pack(
+                'CCC',
+                ($dts >> 7) & 0xFF,
+                (($dts & 0x7F) << 1) | 1,
+                0x01
+            );
 
         // H.264 数据
         $h264Payload = $ptsDtsBytes . $payload;
@@ -298,6 +314,42 @@ class HlsDemo
         return $h264Payload;
     }
 
+    private static function createAacPesPayload(string $payload, int $pts, int $dts, int $audioCodec, int $audioSampleRate, int $audioChannelConfig): string
+    {
+        $adtsHeader = "\xFF\xF1" . // syncword: 12 bits, ID: 1 bit, layer: 2 bits, protection absent: 1 bit
+            chr((($audioCodec - 1) << 6) | (($audioSampleRate & 0xF) << 2) | (($audioChannelConfig >> 2) & 0x1)) .
+            chr((($audioChannelConfig & 0x3) << 6) | (7 + strlen($payload))) . "\xFF\xFC"; // 13-bit frame length
+
+        $aacPayload = $adtsHeader . $payload;
+        return $aacPayload;
+    }
+
+    private static function createH264PesPayload(string $payload, int $pts, int $dts): string
+    {
+        $pesHeader = "\x00\x00\x01" . chr(0xE0); // H.264 video stream ID
+        $pesPacketLength = strlen($payload) + 19; // PES header length (19 bytes)
+        $pesHeader .= chr(($pesPacketLength >> 8) & 0xFF);
+        $pesHeader .= chr($pesPacketLength & 0xFF);
+        $pesHeader .= "\x80"; // no scrambling, no priority, no alignment, PES header present
+        $pesHeader .= "\x80"; // PTS only, no DTS
+        $pesHeader .= "\x0A"; // PES header data length
+
+        // PTS字段的编码
+        $pesHeader .= chr((($pts >> 29) & 0x0E) | 0x21); // '0010' + 3 bits of PTS[32..30] + marker '1'
+        $pesHeader .= chr(($pts >> 22) & 0xFF); // PTS[29..22]
+        $pesHeader .= chr((($pts >> 14) & 0xFE) | 0x01); // PTS[21..15] + marker '1'
+        $pesHeader .= chr(($pts >> 7) & 0xFF); // PTS[14..7]
+        $pesHeader .= chr((($pts << 1) & 0xFE) | 0x01); // PTS[6..0] + marker '1'
+
+        // DTS字段的编码
+        $pesHeader .= chr((($dts >> 29) & 0x0E) | 0x11); // '0001' + 3 bits of DTS[32..30] + marker '1'
+        $pesHeader .= chr(($dts >> 22) & 0xFF); // DTS[29..22]
+        $pesHeader .= chr((($dts >> 14) & 0xFE) | 0x01); // DTS[21..15] + marker '1'
+        $pesHeader .= chr(($dts >> 7) & 0xFF); // DTS[14..7]
+        $pesHeader .= chr((($dts << 1) & 0xFE) | 0x01); // DTS[6..0] + marker '1'
+
+        return $pesHeader . $payload;
+    }
 
     /**
      * 将音频数据包打包
@@ -308,7 +360,7 @@ class HlsDemo
      * @return string
      * @comment 这个方法是对的，但是打包的数据无法解码
      */
-    private static function createPes(int $stream_id, string $payload, int $pts, int $dts): string
+    private static function createPes2(int $stream_id, string $payload, int $pts, int $dts): string
     {
         $pesHeader = "\x00\x00\x01" . chr($stream_id);
         $pesPacketLength = strlen($payload) + 8; // PES header length (9 bytes) - 1
@@ -325,6 +377,27 @@ class HlsDemo
 
         return $pesHeader . $payload;
     }
+
+    private static function createPes(int $stream_id, string $payload, int $pts, int $dts): string
+    {
+        $pesHeader = "\x00\x00\x01" . chr($stream_id);
+        $pesPacketLength = strlen($payload) + 13; // PES header length (14 bytes) - 1
+        $pesHeader .= chr(($pesPacketLength >> 8) & 0xFF);
+        $pesHeader .= chr($pesPacketLength & 0xFF);
+        $pesHeader .= "\x80"; // no scrambling, no priority, no alignment, PES header present
+        $pesHeader .= "\x80"; // PTS only, no DTS
+        $pesHeader .= "\x05"; // PES header data length
+
+        // PTS字段的编码
+        $pesHeader .= chr((($pts >> 29) & 0x0E) | 0x21); // '0010' + 3 bits of PTS[32..30] + marker '1'
+        $pesHeader .= chr(($pts >> 22) & 0xFF); // PTS[29..22]
+        $pesHeader .= chr((($pts >> 14) & 0xFE) | 0x01); // PTS[21..15] + marker '1'
+        $pesHeader .= chr(($pts >> 7) & 0xFF); // PTS[14..7]
+        $pesHeader .= chr((($pts << 1) & 0xFE) | 0x01); // PTS[6..0] + marker '1'
+
+        return $pesHeader . $payload;
+    }
+
 
     /**
      * 生成 MPEG-TS CRC32 校验
