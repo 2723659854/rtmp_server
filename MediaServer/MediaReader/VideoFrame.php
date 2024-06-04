@@ -112,7 +112,6 @@ class VideoFrame extends BinaryStream implements MediaFrame
     {
         if (!$this->avcPacket) {
             $this->avcPacket = new AVCPacket($this);
-            $this->pts = $this->timestamp + $this->avcPacket->compositionTime;
         }
 
         return $this->avcPacket;

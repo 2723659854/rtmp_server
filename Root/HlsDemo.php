@@ -13,7 +13,7 @@ use MediaServer\MediaReader\MediaFrame;
 class HlsDemo
 {
     /** 切片时间 3秒 */
-    public static $duration = 3;
+    public static $duration = 3000;
 
 
     /**
@@ -158,10 +158,8 @@ class HlsDemo
 
         /** ts存放路径 */
         $outputDir = app_path($playStreamPath);
-        /** 切片时间 */
-        $segmentDuration = self::$duration;
         /** 当前时间 */
-        $nowTime = time();
+        $nowTime = $frame->timestamp;
         /** 媒体数据key */
         $mediaKey = $playStreamPath . '_media';
         /** 切片操作时间key */
@@ -178,7 +176,7 @@ class HlsDemo
             Cache::set($lastCutTimeKey, $nowTime);
         }
         /** 比较当前时间和最近一次切片操作时间 若超过切片时间，则开始本次切片  */
-        if (($nowTime - $lastCutTime) >= $segmentDuration) {
+        if (($nowTime - $lastCutTime) >= self::$duration) {
             /** 获取所有媒体数据 */
             $mediaData = Cache::flush($mediaKey);
             /** 并更写最近一次切片操作时间 */
@@ -220,19 +218,23 @@ class HlsDemo
             if ($frame->isAudio()) {
                 $pid = 257;
                 $stream_id = $streamId; // 音频流ID
+                $packet = $frame->getAACPacket()->stream->dump();
                 // 创建 AAC PES 包
-                $pesPayload = self::createAacPesPayload($frame->getPayload(), $frame->pts, $frame->dts, $audioCodec, $audioSampleRate, $audioChannelConfig);
+                $pesPayload = self::createAacPesPayload($packet, $frame->timestamp, $frame->timestamp, $audioCodec, $audioSampleRate, $audioChannelConfig);
                 // 创建 PES 包
-                $pesPacket = self::createPes($stream_id, $pesPayload, $frame->pts, $frame->dts);
+                $pesPacket = self::createPes($stream_id, $pesPayload, $frame->timestamp, $frame->timestamp);
                 /** 写入ts文件 */
                 self::writeTsPacket($pid, $pesPacket, $fileHandle, $audio_continuity_counter, 1);
             } else {
+                $packet = $frame->getAVCPacket();
+                $compositionTime=$packet->compositionTime;
+                $pts = $frame->timestamp + $compositionTime;
                 $pid = 256;
                 $stream_id = 0xE0; // 视频流ID
                 // 创建 H.264 PES 包
-                $pesPayload = self::createH264PesPayload($frame->getPayload(), $frame->pts, $frame->dts);
+                $pesPayload = self::createH264PesPayload($packet->stream->dump(), $pts, $frame->timestamp);
                 // 创建 PES 包
-                $pesPacket = self::createPes($stream_id, $pesPayload, $frame->pts, $frame->dts);
+                $pesPacket = self::createPes($stream_id, $pesPayload, $pts, $frame->timestamp);
                 /** 写入ts文件 */
                 self::writeTsPacket($pid, $pesPacket, $fileHandle, $video_continuity_counter, 1);
             }
