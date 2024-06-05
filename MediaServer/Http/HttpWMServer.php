@@ -59,6 +59,7 @@ class HttpWMServer
      */
     public function onHttpRequest(TcpConnection $connection, Request $request)
     {
+        var_dump("接受到数据");
         switch ($request->method()) {
             case "GET":
                 return $this->getHandler($request);

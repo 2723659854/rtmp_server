@@ -2,7 +2,6 @@
 
 namespace Root\Io;
 
-use http\Exception\BadQueryStringException;
 use MediaServer\Http\HttpWMServer;
 use Root\Protocols\Http;
 use Root\rtmp\TcpConnection;
@@ -12,7 +11,7 @@ use Root\rtmp\TcpConnection;
  * @note 也可以使用epoll模型，但是windows目前不支持。为了兼容windows和Linux系统，所以选择select模型。
  * @comment 代码必须写注释，不然时间长了，自己也看不懂了
  */
-class RtmpDemo
+class Flv
 {
     /** @var array $allSocket 存放所有socket 注意内存泄漏 */
     public static array $allSocket;
@@ -24,7 +23,7 @@ class RtmpDemo
     public string $rtmpPort = '1935';
 
     /** @var string $flvPort flv监听端口 可修改 */
-    public string $flvPort = '8501';
+    public string $flvPort = '8502';
 
     /** @var string $webPort web端口 */
     public string $webPort = '80';
@@ -131,7 +130,6 @@ class RtmpDemo
      */
     private function createFlvSever(): void
     {
-        var_dump($this->flvPort);
         /** 保存flv服务端的socket */
         self::$flvServerSocket = $this->createServer($this->flvPort);
         logger()->info("flv服务：http://{$this->host}:{$this->flvPort}/{AppName}/{ChannelName}.flv");
@@ -187,25 +185,12 @@ class RtmpDemo
     }
 
     /**
-     * 先创建一个网关，用来作为转发flv数据包
-     */
-    public function createGateway()
-    {
-        /** 使用tcp通信 */
-        self::$gateway = $this->createServer('8800');
-        logger()->info("gateway网关：tcp://0.0.0.0:8800");
-    }
-
-    /**
      * 获取实例
      * @return self|null
      */
-    public static function instance(): ?RtmpDemo
+    public static function instance3(): ?RtmpDemo
     {
-        if (!self::$instance) {
-            self::$instance = new self();
-        }
-        return self::$instance;
+
     }
 
     /**
@@ -213,18 +198,11 @@ class RtmpDemo
      */
     public function start(): void
     {
-        /** 开启rtmp 服务 */
-        $this->createRtmpServer();
         /** 创建flv服务器 */
         $this->createFlvSever();
-        /** 创建hls服务器 */
-        $this->createHlsServer();
-        /** 创建网关 */
-        $this->createGateway();
         /** 开始接收客户端请求 */
         $this->accept();
     }
-
 
     /**
      * 接受客户端的链接，并处理数据
@@ -233,205 +211,6 @@ class RtmpDemo
     {
         /** 创建多个子进程阻塞接收服务端socket 这个while死循环 会导致for循环被阻塞，不往下执行，创建了子进程也没有用，直接在第一个子进程哪里阻塞了 */
         while (true) {
-
-            /** 初始化需要监测的可写入的客户端，需要排除的客户端都为空 */
-            $except = [];
-            /** 需要监听socket，自动清理已报废的链接 */
-            foreach (self::$allSocket as $key => $value) {
-                if (!is_resource($value)) {
-                    unset(self::$allSocket[$key]);
-                }
-            }
-            $write = $read = self::$allSocket;
-            /** 使用stream_select函数监测可读，可写的连接，如果某一个连接接收到数据，那么数据就会改变，select使用的foreach遍历所有的连接，查看是否可读，就是有消息的时候标记为可读 */
-            /** 这里设置了阻塞60秒 */
-            try {
-                stream_select($read, $write, $except, 60);
-            } catch (\Exception $exception) {
-                logger()->error($exception->getMessage());
-            }
-            /** 处理可读的链接 */
-            if ($read) {
-                foreach ($read as $fd) {
-                    $fd_key = (int)$fd;
-                    /** 处理多个服务端的链接 */
-                    if (in_array($fd, $this->serverSocket)) {
-                        /** 读取服务端接收到的 消息，这个消息的内容是客户端连接 ，stream_socket_accept方法负责接收客户端连接 */
-                        $clientSocket = stream_socket_accept($fd, 0, $remote_address); //阻塞监听 设置超时0，并获取客户端地址
-                        /** 如果这个客户端连接不为空 给链接绑定可读事件，绑定协议类型，而不同的协议绑定了不同的数据处理方式 */
-                        if (!empty($clientSocket)) {
-                            try {
-                                /** 使用tcp解码器 */
-                                $connection = new TcpConnection($clientSocket, $remote_address);
-                                /** 通信协议 */
-                                $connection->transport = $this->transport;
-                                /** 如果是flv的链接 就设置为http的协议 flv是长链接 */
-                                if (self::$flvServerSocket && $fd == self::$flvServerSocket) {
-                                    $connection->protocol = \MediaServer\Http\ExtHttpProtocol::class;
-                                    /** 支持http的flv播放 onMessage事件处理请求数据，使用ExtHttp协议处理数据， */
-                                    $connection->onMessage = [new HttpWMServer(), 'onHttpRequest'];
-                                    /** 支持ws的flv播放 onWebSocketConnect事件处理请求数据 ，如果是ws链接，
-                                     * ExtHttpProtocol协议自动切换为ws链接，然后在握手后调用ws链接事件，添加播放设备，返回握手信息 ，
-                                     * 后续媒体MediaServer使用ws链接返回媒体数据给链接
-                                     */
-                                    $connection->onWebSocketConnect = [new HttpWMServer(), 'onWebsocketRequest'];
-                                }
-                                /** web服务器使用http协议 hls是短连接*/
-                                if (self::$webServerSocket && $fd == self::$webServerSocket) {
-                                    /** 更换协议为http */
-                                    $connection->protocol = Http::class;
-                                    /** 绑定消息处理回调函数 */
-                                    $connection->onMessage = [new Http(), 'onHlsMessage'];
-                                }
-
-                                /** 网关服务器 保存flv客户端，使用tcp协议 ，添加可读事件 */
-                                if (self::$gateway&&$fd==self::$gateway){
-                                    $connection->protocol = 'gateway';
-                                    /** 单独保存flv的客户端 */
-                                    RtmpDemo::$flvClients[(int)$clientSocket] = $clientSocket;
-                                    /** 这个服务端的作用是，把rtmp服务器的数据转发给客户端 ，那么就是可写事件 */
-                                    self::add($clientSocket,self::EV_READ,[$this,'gatewayRead']);
-                                    self::add($clientSocket,self::EV_WRITE,[$this,'gatewayWrite']);
-                                }
-
-                                /** rtmp 服务 长链接 协议直接处理了数据，不会触发onMessage事件，无需设置onMessage */
-                                if (self::$rtmpServerSocket && $fd == self::$rtmpServerSocket) {
-                                    /** 绑定协议类型为WMBufferStream */
-                                    $connection->protocol = new \MediaServer\Utils\WMBufferStream($connection);
-                                }
-                            } catch (\Exception|\RuntimeException $exception) {
-                                logger()->error($exception->getMessage());
-                            }
-                        }
-                        /** 将这个客户端连接保存，目测这里如果不保存，应该是无法发送和接收消息的，就是要把所有的连接都保存在内存中 */
-                        RtmpDemo::$allSocket[(int)$clientSocket] = $clientSocket;
-                    } else {
-                        /** 已经是建立过的链接，则直接该链接的读事件 */
-                        if (isset($this->_allEvents[$fd_key][self::EV_READ])) {
-                            \call_user_func_array(
-                                $this->_allEvents[$fd_key][self::EV_READ][0],
-                                array($this->_allEvents[$fd_key][self::EV_READ][1])
-                            );
-                        }
-                    }
-
-                }
-            }
-            /** 处理可写的链接 */
-            if ($write) {
-                foreach ($write as $fd) {
-                    $fd_key = (int)$fd;
-                    /** 调用预定义的可写回调函数 */
-                    if (isset($this->_allEvents[$fd_key][self::EV_WRITE])) {
-                        \call_user_func_array(
-                            $this->_allEvents[$fd_key][self::EV_WRITE][0],
-                            array($this->_allEvents[$fd_key][self::EV_WRITE][1])
-                        );
-                    }
-                }
-            }
-        }
-    }
-
-    /** 网关服务器 */
-    public static $gateway = null;
-
-
-
-    /** 创建flv客户端和网关建立链接 */
-    public function createFlvClient()
-    {
-        /** 初始化客户端设置 */
-        $contextOptions = [];
-        /** 设置参数 */
-        $context = stream_context_create($contextOptions);
-        /** 创建客户端 STREAM_CLIENT_CONNECT 同步请求，STREAM_CLIENT_ASYNC_CONNECT 异步请求*/
-        $socket = @stream_socket_client("tcp://127.0.0.1:8800", $errno, $errstr, 3, STREAM_CLIENT_ASYNC_CONNECT, $context);
-        /** 涉及到socket通信的地方，调用RuntimeException都会导致进程退出，抛出异常：Fatal error: Uncaught RuntimeException ，这是个很诡异的事情 */
-        if ($errno) {
-            var_dump($errno,$errstr);
-            return;
-        }
-        /** 设置位非阻塞状态 */
-        stream_set_blocking($socket, false);
-        /** 将服务端保存所有socket列表  */
-        self::$allSocket[(int)$socket] = $socket;
-        /** 单独保存服务端 */
-        $this->serverSocket[(int)$socket] = $socket;
-        return $socket;
-    }
-
-    /** flv客户端 */
-    public static $flvClient = null;
-
-    /**
-     * 子进程，启动flv代理服务
-     */
-    public function startFlvGateway()
-    {
-        /** 创建flv服务器 */
-        $this->createFlvSever();
-        /** 先创建一个客户端和flv服务器通信 */
-        self::$flvClient = $this->createFlvClient();
-        /** 给客户端创建读写事件 ,不需要想服务端发送任何数据 */
-        self::add(self::$flvClient,self::EV_READ,[$this,'flvRead']);
-        self::add(self::$flvClient,self::EV_WRITE,[$this,'flvWrite']);
-        /** 给网关服务器发送消息 */
-        fwrite(self::$flvClient,'hello');
-
-
-
-        /** 开始接收客户端请求 */
-        $this->acceptFlv();
-    }
-
-    /** 客户端读事件没问题 */
-    public function flvRead($fd){
-        $data = '';
-        while (!feof($fd)){
-            $data = fread($fd,1024);
-        }
-        var_dump("接收到的数据",$data);
-    }
-
-    /**
-     * 客户端向网关发送数据
-     * @param $fd
-     * @comment 法相服务端一直可读，会一直发送数据，这里要判断，只有当有数据的时候才发送，不然对面服务器要崩溃
-     */
-    public function flvWrite($fd){
-        fwrite($fd,'1111111111111111111111111');
-    }
-
-
-    /**
-     * 网关监测客户端可读事件
-     * @param $fd
-     */
-    public function gatewayRead($fd){
-        var_dump("网关服务器的读事件");
-        $buffer = fread($fd,1024);
-        var_dump($buffer);
-    }
-
-    /**
-     * 网关监测客户端可写事件
-     * @param $fd
-     */
-    public function gatewayWrite($fd){
-        fwrite($fd,'server to client');
-    }
-
-    /** 链接到本flv服务器的客户端 */
-    public static $flvClients = null;
-
-    /**
-     * 接受客户端的链接，并处理数据
-     */
-    private function acceptFlv(): void
-    {
-        /** 创建多个子进程阻塞接收服务端socket 这个while死循环 会导致for循环被阻塞，不往下执行，创建了子进程也没有用，直接在第一个子进程哪里阻塞了 */
-        while (true) {
             /** 初始化需要监测的可写入的客户端，需要排除的客户端都为空 */
             $except = [];
             /** 需要监听socket，自动清理已报废的链接 */
@@ -466,6 +245,7 @@ class RtmpDemo
                                 $connection->transport = $this->transport;
                                 /** 如果是flv的链接 就设置为http的协议 flv是长链接 */
                                 if (self::$flvServerSocket && $fd == self::$flvServerSocket) {
+                                    var_dump("是flv链接呢");
                                     $connection->protocol = \MediaServer\Http\ExtHttpProtocol::class;
                                     /** 支持http的flv播放 onMessage事件处理请求数据，使用ExtHttp协议处理数据， */
                                     $connection->onMessage = [new HttpWMServer(), 'onHttpRequest'];
@@ -474,7 +254,6 @@ class RtmpDemo
                                      * 后续媒体MediaServer使用ws链接返回媒体数据给链接
                                      */
                                     $connection->onWebSocketConnect = [new HttpWMServer(), 'onWebsocketRequest'];
-
                                     new \MediaServer\Http\ExtHttpProtocol($connection);
                                 }
 
@@ -484,13 +263,9 @@ class RtmpDemo
                         }
                         /** 将这个客户端连接保存，目测这里如果不保存，应该是无法发送和接收消息的，就是要把所有的连接都保存在内存中 */
                         RtmpDemo::$allSocket[(int)$clientSocket] = $clientSocket;
-
-
                     } else {
-
                         /** 已经是建立过的链接，则直接该链接的读事件 */
                         if (isset($this->_allEvents[$fd_key][self::EV_READ])) {
-                            var_dump("设置了消息处理");
                             \call_user_func_array(
                                 $this->_allEvents[$fd_key][self::EV_READ][0],
                                 array($this->_allEvents[$fd_key][self::EV_READ][1])
