@@ -308,7 +308,8 @@ class HttpWMServer
             list(, $flvPath) = $matches;
             //$this->playMediaStream($request, $flvPath);
 
-            RtmpDemo::$writeBuffer[]=['cmd'=>'play','data'=>['path'=>$flvPath,],'socket'=>(int)$request->connection->getSocket(),'to'=>'server'];
+            /** 不发送 */
+            //RtmpDemo::$writeBuffer[]=['cmd'=>'play','data'=>['path'=>$flvPath,],'socket'=>(int)$request->connection->getSocket(),'to'=>'server'];
 
             return true;
         }

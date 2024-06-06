@@ -395,80 +395,40 @@ class RtmpDemo
 
     public static $readBuffer = "";
 
+
     /**
      * 这里是flv客户端向播放器推送数据
      * @param $fd
      * @return void
-     * @comment 这里是客户端
      */
     public function flvRead($fd)
     {
+        $type = intval(fread($fd,3));
+        $timestamp = intval(fread($fd,12));
+        $frame = fread($fd,50000);
+        $frame = str_replace("\r\n","",$frame);
         /** 这里有问题 ，接收流媒体数据的时候有问题 */
-        $buffer = '';
-        while (true) {
-            $buffer .= fread($fd, 1024);
-            if (strpos($buffer, "\r\n")) {
-                break;
-            }
+        if ($type == MediaFrame::VIDEO_FRAME) {
+            $frame = new VideoFrame($frame, $timestamp);
         }
-        $originData = json_decode(trim($buffer, "\r\n"), true);
-        if (!empty($originData)) {
-            //var_dump("接收到服务端的数据",$originData);
-            $cmd = $originData['cmd'];
-            $socket = $originData['socket'];
-            $data = $originData['data'];
-            /** 请求播放 */
-            if ($cmd == 'play') {
-                if ($data['hasPublishStream'] == false) {
-                    $back = new Response(
-                        404,
-                        ['Content-Type' => 'text/plain', 'Access-Control-Allow-Origin' => '*',],
-                        "Stream not found."
-                    );
-                    fwrite(self::$playerClients[$socket], $back->__toString());
-                } else {
-                    /** 初始化 */
-                    if (!isset(self::$flvVideoAndAudioDataQueue[$data['path']])) {
-                        self::$flvVideoAndAudioDataQueue[$data['path']] = [];
-                    }
-                    /** 存真实的客户端 */
-                    self::$clientWithPath[$data['path']][] = self::$playerClients[$socket] ?? null;
-                }
-            }
-            /** 转发音视频数据 */
-            if ($cmd == 'frame') {
-                $type = $data['type'];
-                $timestamp = $data['timestamp'];
-                $hexData = hex2bin($data['frame']);
+        if ($type == MediaFrame::AUDIO_FRAME) {
+            $frame = new AudioFrame($frame, $timestamp);
+        }
+        if ($type == MediaFrame::META_FRAME) {
+            $frame = new MetaDataFrame($frame);
+        }
+        foreach (self::$playerClients as $client) {
+            if (is_resource($client)) {
+                //var_dump("要给客户端发送数据呢");
+                //todo 发送数据给客户端
+                $this->frameSend($frame, $client);
+            } else {
+                unset(self::$playerClients[(int)$client]);
 
-                $path = $data['path'];
-                if ($type == MediaFrame::VIDEO_FRAME) {
-                    $frame = new VideoFrame(($hexData), $timestamp);
-                }
-                if ($type == MediaFrame::AUDIO_FRAME) {
-                    $frame = new AudioFrame(($hexData), $timestamp);
-                }
-                if ($type == MediaFrame::META_FRAME) {
-                    $frame = new MetaDataFrame(($hexData));
-                }
-
-                //$needSendDataClient = array_intersect(self::$playerClients,self::$clientWithPath[$path]);
-                foreach (self::$playerClients as $client) {
-                    if (is_resource($client)) {
-                        //var_dump("要给客户端发送数据呢");
-                        //todo 发送数据给客户端
-                        $this->frameSend($frame, $client);
-                    } else {
-                        unset(self::$playerClients[(int)$client]);
-
-                        //todo 从客户端播放路径数组删除
-                    }
-                }
+                //todo 从客户端播放路径数组删除
             }
         }
     }
-
-
     /**
      * 发送数据到客户端
      * @param $frame MediaFrame
@@ -646,9 +606,21 @@ class RtmpDemo
     {
         $buffer = array_shift(self::$gatewayBuffer);
         if (!empty($buffer)) {
-            /** 给协议加上结束符号 */
-            $string = json_encode($buffer) . "\r\n";
-            fwrite($fd, $string, strlen($string));
+            if ($buffer['cmd']=='frame'){
+                /** 直接发送二进制数据 总长度 6size + 2换行 + data +2换行 +1type +2换行 ，客户端首先读取6个字节，然后读取size + 7 */
+                //fwrite($fd,str_pad(strlen($buffer['data']['frame']), 6, "0", STR_PAD_LEFT)."\r\n".$buffer['data']['frame']."\r\n".$buffer['data']['type']."\r\n");
+
+                var_dump($buffer['data']['type']);
+                var_dump($buffer['data']['timestamp']);
+                /** 先发送包的类型长度规定为3位 */
+                fwrite($fd,str_pad($buffer['data']['type'], 3, "0", STR_PAD_LEFT));
+                /** 发送15位的时间戳 */
+                fwrite($fd,str_pad($buffer['data']['timestamp'], 12, "0", STR_PAD_LEFT));
+                /** 然后发送数据 */
+                fwrite($fd,$buffer['data']['frame']."\r\n");
+
+            }
+
         }
     }
 

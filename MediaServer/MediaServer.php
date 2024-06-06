@@ -205,8 +205,8 @@ class MediaServer
             'data'=>[
                 'path'=>$publisher->getPublishPath(),
                 /** 这样子处理数据，解析出来不对 */
-                'frame'=>bin2hex($frame->_data),
-                //'frame'=>($frame->_data),
+                //'frame'=>bin2hex($frame->_data),
+                'frame'=>($frame->_data),
                 'timestamp'=>$frame->timestamp??0,
                 'type'=>$frame->FRAME_TYPE
             ]
