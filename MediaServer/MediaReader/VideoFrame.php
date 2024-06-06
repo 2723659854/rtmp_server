@@ -79,9 +79,13 @@ class VideoFrame extends BinaryStream implements MediaFrame
     public $pts;
     public $dts;
 
+    public $_buffer ='';
+
     /** 初始化视频编码格式 */
     public function __construct($data, $timestamp = 0)
     {
+
+        $this->_buffer = $data;
         /** 装载数据 方便对数据的读取 */
         parent::__construct($data);
         /** 时间戳 这个是dts */

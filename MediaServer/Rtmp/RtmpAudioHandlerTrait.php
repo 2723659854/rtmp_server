@@ -5,7 +5,9 @@ namespace MediaServer\Rtmp;
 
 use MediaServer\MediaReader\AACPacket;
 use MediaServer\MediaReader\AudioFrame;
+use MediaServer\MediaReader\MediaFrame;
 use MediaServer\MediaServer;
+use Root\Io\RtmpDemo;
 
 /**
  * @purpose 流媒体之音频处理
@@ -25,6 +27,17 @@ trait RtmpAudioHandlerTrait
          * @var $p RtmpPacket
          */
         $p = $this->currentPacket;
+        /** 加入到队列 */
+        RtmpDemo::$gatewayBuffer[] = [
+            'cmd'=>'frame',
+            'socket'=>null,
+            'data'=>[
+                'path'=>$this->publishStreamPath,
+                'frame'=>$p->payload,
+                'timestamp'=>$p->clock,
+                'type'=>MediaFrame::AUDIO_FRAME
+            ]
+        ];
         /** 将音频文件投递到audio解码器中 */
         $audioFrame = new AudioFrame($p->payload, $p->clock);
 

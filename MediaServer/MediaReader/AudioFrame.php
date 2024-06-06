@@ -56,6 +56,7 @@ class AudioFrame extends BinaryStream implements MediaFrame
 
     public $dts = 0;
 
+    public $_buffer ;
     /**
      * 初始化
      * @param $data
@@ -63,6 +64,7 @@ class AudioFrame extends BinaryStream implements MediaFrame
      */
     public function __construct($data, $timestamp = 0)
     {
+        $this->_buffer = $data;
         /** 读取数据 */
         parent::__construct($data);
         /** 时间戳 */

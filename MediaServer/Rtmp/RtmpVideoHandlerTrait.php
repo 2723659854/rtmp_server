@@ -4,7 +4,9 @@
 namespace MediaServer\Rtmp;
 
 use MediaServer\MediaReader\AVCPacket;
+use MediaServer\MediaReader\MediaFrame;
 use MediaServer\MediaReader\VideoFrame;
+use Root\Io\RtmpDemo;
 
 
 /**
@@ -21,8 +23,20 @@ trait RtmpVideoHandlerTrait
          * @var $p RtmpPacket
          */
         $p = $this->currentPacket;
+        /** 加入到队列 */
+        RtmpDemo::$gatewayBuffer[] = [
+            'cmd'=>'frame',
+            'socket'=>null,
+            'data'=>[
+                'path'=>$this->publishStreamPath,
+                'frame'=>$p->payload,
+                'timestamp'=>$p->clock,
+                'type'=>MediaFrame::VIDEO_FRAME
+            ]
+        ];
         /** 将视频数据存入视频帧包 */
         $videoFrame = new VideoFrame($p->payload, $p->clock);
+
         /** 获取视频编码 */
         if ($this->videoCodec == 0) {
             $this->videoCodec = $videoFrame->codecId;

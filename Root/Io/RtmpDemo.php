@@ -392,7 +392,7 @@ class RtmpDemo
     /** 记录每一个客户端请求的资源*/
     public static array $clientWithPath;
 
-
+    /** 文件暂存区 */
     public static $readBuffer = "";
 
 
@@ -400,35 +400,58 @@ class RtmpDemo
      * 这里是flv客户端向播放器推送数据
      * @param $fd
      * @return void
+     * @comment 读取二进制数据出了问题
      */
     public function flvRead($fd)
     {
-        $type = intval(fread($fd,3));
-        $timestamp = intval(fread($fd,12));
-        $frame = fread($fd,50000);
-        $frame = str_replace("\r\n","",$frame);
-        /** 这里有问题 ，接收流媒体数据的时候有问题 */
-        if ($type == MediaFrame::VIDEO_FRAME) {
-            $frame = new VideoFrame($frame, $timestamp);
-        }
-        if ($type == MediaFrame::AUDIO_FRAME) {
-            $frame = new AudioFrame($frame, $timestamp);
-        }
-        if ($type == MediaFrame::META_FRAME) {
-            $frame = new MetaDataFrame($frame);
-        }
-        foreach (self::$playerClients as $client) {
-            if (is_resource($client)) {
-                //var_dump("要给客户端发送数据呢");
-                //todo 发送数据给客户端
-                $this->frameSend($frame, $client);
-            } else {
-                unset(self::$playerClients[(int)$client]);
 
-                //todo 从客户端播放路径数组删除
+        $buffer = fread($fd,50000);
+        self::$readBuffer .=$buffer;
+        /** 获取第一个报文结束符\r\n\r\n */
+        if ($pos = strpos(self::$readBuffer,"\r\n\r\n")){
+            /** 获取完整的内容 */
+            $content = substr(self::$readBuffer,0,$pos+4);
+            /** 更新暂存区 */
+            self::$readBuffer = substr(self::$readBuffer,$pos+4);
+
+            /** 拆分为数组 */
+            $array = explode("\r\n",$content);
+
+            //var_dump($array[0],$array[1]);
+            $type = intval($array[0]);
+
+            $timestamp = intval($array[1]);
+            var_dump($array[0]."-".$array[1].'-'.$type.'-'.$timestamp);
+            $frame = $array[2];
+            /** 这里有问题 ，接收流媒体数据的时候有问题 */
+            if ($type == MediaFrame::VIDEO_FRAME) {
+
+                $frame = new VideoFrame($frame, $timestamp);
             }
+            if ($type == MediaFrame::AUDIO_FRAME) {
+                $frame = new AudioFrame($frame, $timestamp);
+            }
+            if ($type == MediaFrame::META_FRAME) {
+                $frame = new MetaDataFrame($frame);
+            }
+            foreach (self::$playerClients as $client) {
+                if (is_resource($client)) {
+                    //var_dump("要给客户端发送数据呢");
+                    //todo 发送数据给客户端
+                    $this->frameSend($frame, $client);
+                } else {
+                    unset(self::$playerClients[(int)$client]);
+
+                    //todo 从客户端播放路径数组删除
+                }
+            }
+
         }
+
+
+
     }
+
     /**
      * 发送数据到客户端
      * @param $frame MediaFrame
@@ -485,6 +508,7 @@ class RtmpDemo
 
     /** 是否已经发送了第一个flv块*/
     public static $hasSendHeader = [];
+
     /**
      * 发送数据
      * @param $data
@@ -497,20 +521,20 @@ class RtmpDemo
         if (!isset(self::$hasSendHeader[(int)$client])) {
             /** 配置flv头 */
             $content = "HTTP/1.1 200 OK\r\n";
-            $content .="Cache-Control: no-cache\r\n";
+            $content .= "Cache-Control: no-cache\r\n";
             $content .= "Content-Type: video/x-flv\r\n";
             $content .= "Transfer-Encoding: chunked\r\n";
             $content .= "Connection: keep-alive\r\n";
             $content .= "Server: xiaosongshu\r\n";
             $content .= "Access-Control-Allow-Origin: *\r\n";
-            $content .="\r\n";
+            $content .= "\r\n";
             /** 向浏览器发送数据 */
-            fwrite($client, $content.\dechex(\strlen($data))."\r\n$data\r\n");
+            fwrite($client, $content . \dechex(\strlen($data)) . "\r\n$data\r\n");
             /** 标记已发送过头部了 */
             self::$hasSendHeader[(int)$client] = 1;
-        }else{
+        } else {
             /** 直接发送分块后的flv数据 */
-            fwrite($client,\dechex(\strlen($data))."\r\n$data\r\n");
+            fwrite($client, \dechex(\strlen($data)) . "\r\n$data\r\n");
         }
     }
 
@@ -606,18 +630,17 @@ class RtmpDemo
     {
         $buffer = array_shift(self::$gatewayBuffer);
         if (!empty($buffer)) {
-            if ($buffer['cmd']=='frame'){
-                /** 直接发送二进制数据 总长度 6size + 2换行 + data +2换行 +1type +2换行 ，客户端首先读取6个字节，然后读取size + 7 */
-                //fwrite($fd,str_pad(strlen($buffer['data']['frame']), 6, "0", STR_PAD_LEFT)."\r\n".$buffer['data']['frame']."\r\n".$buffer['data']['type']."\r\n");
+            if ($buffer['cmd'] == 'frame') {
 
                 var_dump($buffer['data']['type']);
                 var_dump($buffer['data']['timestamp']);
-                /** 先发送包的类型长度规定为3位 */
-                fwrite($fd,str_pad($buffer['data']['type'], 3, "0", STR_PAD_LEFT));
-                /** 发送15位的时间戳 */
-                fwrite($fd,str_pad($buffer['data']['timestamp'], 12, "0", STR_PAD_LEFT));
-                /** 然后发送数据 */
-                fwrite($fd,$buffer['data']['frame']."\r\n");
+
+                $type = str_pad($buffer['data']['type'], 3, "0", STR_PAD_LEFT);
+                $timestamp = str_pad($buffer['data']['timestamp'], 12, "0", STR_PAD_LEFT);
+                $data = $buffer['data']['frame'];
+                /** 使用http之类的文本分隔符 ，一整个报文之间用换行符分割 ，这个鸡儿协议真难搞 */
+                $string = $type."\r\n".$timestamp."\r\n".$data."\r\n\r\n";
+                fwrite($fd,$string);
 
             }
 
