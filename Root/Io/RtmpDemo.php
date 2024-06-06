@@ -394,6 +394,7 @@ class RtmpDemo
 
 
     public static $readBuffer = "";
+
     /**
      * 这里是flv客户端向播放器推送数据
      * @param $fd
@@ -404,13 +405,13 @@ class RtmpDemo
     {
         /** 这里有问题 ，接收流媒体数据的时候有问题 */
         $buffer = '';
-        while (true){
-            $buffer .=fread($fd,1024);
-            if (strpos($buffer,"\r\n")){
+        while (true) {
+            $buffer .= fread($fd, 1024);
+            if (strpos($buffer, "\r\n")) {
                 break;
             }
         }
-        $originData = json_decode(trim($buffer,"\r\n"), true);
+        $originData = json_decode(trim($buffer, "\r\n"), true);
         if (!empty($originData)) {
             //var_dump("接收到服务端的数据",$originData);
             $cmd = $originData['cmd'];
@@ -431,7 +432,7 @@ class RtmpDemo
                         self::$flvVideoAndAudioDataQueue[$data['path']] = [];
                     }
                     /** 存真实的客户端 */
-                    self::$clientWithPath[$data['path']][] = self::$playerClients[$socket]??null;
+                    self::$clientWithPath[$data['path']][] = self::$playerClients[$socket] ?? null;
                 }
             }
             /** 转发音视频数据 */
@@ -441,23 +442,23 @@ class RtmpDemo
                 $hexData = hex2bin($data['frame']);
 
                 $path = $data['path'];
-                if ($type == MediaFrame::VIDEO_FRAME){
-                    $frame = new VideoFrame(($hexData),$timestamp);
+                if ($type == MediaFrame::VIDEO_FRAME) {
+                    $frame = new VideoFrame(($hexData), $timestamp);
                 }
-                if ($type == MediaFrame::AUDIO_FRAME){
-                    $frame = new AudioFrame(($hexData),$timestamp);
+                if ($type == MediaFrame::AUDIO_FRAME) {
+                    $frame = new AudioFrame(($hexData), $timestamp);
                 }
-                if ($type == MediaFrame::META_FRAME){
+                if ($type == MediaFrame::META_FRAME) {
                     $frame = new MetaDataFrame(($hexData));
                 }
 
                 //$needSendDataClient = array_intersect(self::$playerClients,self::$clientWithPath[$path]);
-                foreach (self::$playerClients as $client){
-                    if (is_resource($client)){
+                foreach (self::$playerClients as $client) {
+                    if (is_resource($client)) {
                         //var_dump("要给客户端发送数据呢");
                         //todo 发送数据给客户端
-                        $this->frameSend($frame,$client);
-                    }else{
+                        $this->frameSend($frame, $client);
+                    } else {
                         unset(self::$playerClients[(int)$client]);
 
                         //todo 从客户端播放路径数组删除
@@ -468,23 +469,22 @@ class RtmpDemo
     }
 
 
-
     /**
      * 发送数据到客户端
      * @param $frame MediaFrame
      * @return mixed
      * @comment 发送音频，视频，元数据
      */
-    public function frameSend($frame,$client)
+    public function frameSend($frame, $client)
     {
         //   logger()->info("send ".get_class($frame)." timestamp:".($frame->timestamp??0));
         switch ($frame->FRAME_TYPE) {
             case MediaFrame::VIDEO_FRAME:
-                return $this->sendVideoFrame($frame,$client);
+                return $this->sendVideoFrame($frame, $client);
             case MediaFrame::AUDIO_FRAME:
-                return $this->sendAudioFrame($frame,$client);
+                return $this->sendAudioFrame($frame, $client);
             case MediaFrame::META_FRAME:
-                return $this->sendMetaDataFrame($frame,$client);
+                return $this->sendMetaDataFrame($frame, $client);
         }
     }
 
@@ -493,7 +493,7 @@ class RtmpDemo
      * @param $metaDataFrame MetaDataFrame|MediaFrame
      * @return mixed
      */
-    public function sendMetaDataFrame($metaDataFrame,$client)
+    public function sendMetaDataFrame($metaDataFrame, $client)
     {
         /** 组装数据 */
         $tag = new FlvTag();
@@ -504,7 +504,7 @@ class RtmpDemo
         /** 将数据打包编码 */
         $chunks = Flv::createFlvTag($tag);
         /** 发送 */
-        $this->write($chunks,$client);
+        $this->write($chunks, $client);
     }
 
     /**
@@ -512,7 +512,7 @@ class RtmpDemo
      * @param $audioFrame AudioFrame|MediaFrame
      * @return mixed
      */
-    public function sendAudioFrame($audioFrame,$client)
+    public function sendAudioFrame($audioFrame, $client)
     {
         $tag = new FlvTag();
         $tag->type = Flv::AUDIO_TAG;
@@ -520,38 +520,38 @@ class RtmpDemo
         $tag->data = (string)$audioFrame;
         $tag->dataSize = strlen($tag->data);
         $chunks = Flv::createFlvTag($tag);
-        $this->write($chunks,$client);
+        $this->write($chunks, $client);
     }
 
+    /** 是否已经发送了第一个flv块*/
     public static $hasSendHeader = [];
     /**
      * 发送数据
      * @param $data
      * @return null
+     * @comment 已验证过，此方法可以正确的传输flv数据，但是无法播放，那么问题就出在数据上，可能是数据转16进制，再转二进制出错了。
      */
-    public function write($data,$client)
+    public function write($data, $client)
     {
-        if (!isset(self::$hasSendHeader[(int)$client])){
-            /** 感觉是这一步有问题 */
-            $response = new Response(200,[
-                /** 禁止使用缓存 */
-                'Cache-Control' => 'no-cache',
-                /** 资源类型 flv */
-                'Content-Type' => 'video/x-flv',
-                /** 允许跨域 */
-                'Access-Control-Allow-Origin' => '*',
-                /** 长链接 */
-                'Connection' => 'keep-alive',
-                /** 数据是分块的，而不是告诉客户端数据的大小，通常用于流式传输 */
-                'Transfer-Encoding' => 'chunked',
-            ],$data);
-
-        }else{
+        /** 判断是否是发送第一个分块 */
+        if (!isset(self::$hasSendHeader[(int)$client])) {
+            /** 配置flv头 */
+            $content = "HTTP/1.1 200 OK\r\n";
+            $content .="Cache-Control: no-cache\r\n";
+            $content .= "Content-Type: video/x-flv\r\n";
+            $content .= "Transfer-Encoding: chunked\r\n";
+            $content .= "Connection: keep-alive\r\n";
+            $content .= "Server: xiaosongshu\r\n";
+            $content .= "Access-Control-Allow-Origin: *\r\n";
+            $content .="\r\n";
+            /** 向浏览器发送数据 */
+            fwrite($client, $content.\dechex(\strlen($data))."\r\n$data\r\n");
+            /** 标记已发送过头部了 */
             self::$hasSendHeader[(int)$client] = 1;
-            $response = new Chunk($data);
+        }else{
+            /** 直接发送分块后的flv数据 */
+            fwrite($client,\dechex(\strlen($data))."\r\n$data\r\n");
         }
-
-        fwrite($client,$response->__toString(),strlen($response->__toString()));
     }
 
     /**
@@ -559,7 +559,7 @@ class RtmpDemo
      * @param $videoFrame VideoFrame|MediaFrame
      * @return mixed
      */
-    public function sendVideoFrame($videoFrame,$client)
+    public function sendVideoFrame($videoFrame, $client)
     {
         $tag = new FlvTag();
         $tag->type = Flv::VIDEO_TAG;
@@ -567,7 +567,7 @@ class RtmpDemo
         $tag->data = (string)$videoFrame;
         $tag->dataSize = strlen($tag->data);
         $chunks = Flv::createFlvTag($tag);
-        $this->write($chunks,$client);
+        $this->write($chunks, $client);
     }
 
 
@@ -580,13 +580,13 @@ class RtmpDemo
     {
         $buffer = array_shift(self::$writeBuffer);
         if (!empty($buffer)) {
-            if ($buffer['to']=='server'){
+            if ($buffer['to'] == 'server') {
                 $string = json_encode($buffer);
                 fwrite($fd, $string, strlen($string));
-            }else{
+            } else {
                 $socket = $buffer['socket'];
                 $client = self::$playerClients[(int)$socket];
-                fwrite($client,$buffer['data']['buffer']);
+                fwrite($client, $buffer['data']['buffer']);
             }
         }
     }
@@ -596,7 +596,6 @@ class RtmpDemo
     public static $flvVideoAndAudioDataQueue = [];
     /** 客户端需要发送的数据 */
     public static array $writeBuffer = [];
-
 
 
     /**
@@ -648,7 +647,7 @@ class RtmpDemo
         $buffer = array_shift(self::$gatewayBuffer);
         if (!empty($buffer)) {
             /** 给协议加上结束符号 */
-            $string = json_encode($buffer)."\r\n";
+            $string = json_encode($buffer) . "\r\n";
             fwrite($fd, $string, strlen($string));
         }
     }

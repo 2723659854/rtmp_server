@@ -105,6 +105,39 @@ class FlvPlayStream extends EventEmitter implements PlayStreamInterface
     public function write($data)
     {
         return $this->input->write($data);
+
+    }
+
+    /** 是否已经发送了第一个flv块*/
+    public static $hasSendHeader = [];
+    /**
+     * 发送数据
+     * @param $data
+     * @return null
+     * @comment 此方法没有错误，但是为什么不能播放
+     */
+    public function writeCopy($data)
+    {
+        $client = $this->input->connection->getSocket();
+        /** 判断是否是发送第一个分块 */
+        if (!isset(self::$hasSendHeader[(int)$client])) {
+            /** 配置flv头 */
+            $content = "HTTP/1.1 200 OK\r\n";
+            $content .="Cache-Control: no-cache\r\n";
+            $content .= "Content-Type: video/x-flv\r\n";
+            $content .= "Transfer-Encoding: chunked\r\n";
+            $content .= "Connection: keep-alive\r\n";
+            $content .= "Server: xiaosongshu\r\n";
+            $content .= "Access-Control-Allow-Origin: *\r\n";
+            $content .="\r\n";
+            /** 向浏览器发送数据 */
+            fwrite($client, $content.\dechex(\strlen($data))."\r\n$data\r\n");
+            /** 标记已发送过头部了 */
+            self::$hasSendHeader[(int)$client] = 1;
+        }else{
+            /** 直接发送分块后的flv数据 */
+            fwrite($client,\dechex(\strlen($data))."\r\n$data\r\n");
+        }
     }
 
     /**

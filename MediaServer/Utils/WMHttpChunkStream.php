@@ -18,7 +18,7 @@ class WMHttpChunkStream implements  WMChunkStreamInterface
     /**
      * @var TcpConnection
      */
-    protected $connection;
+    public $connection;
 
     protected $sendHeader = false;
 
