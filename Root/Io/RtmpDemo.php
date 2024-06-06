@@ -357,8 +357,7 @@ class RtmpDemo
         stream_set_blocking($socket, false);
         /** 将服务端保存所有socket列表  */
         self::$allSocket[(int)$socket] = $socket;
-        /** 单独保存服务端 */
-        $this->serverSocket[(int)$socket] = $socket;
+
         self::$flvClient = $socket;
         /** 给客户端创建读写事件 ,不需要想服务端发送任何数据 */
         self::add(self::$flvClient,self::EV_READ,[$this,'flvRead']);
@@ -387,29 +386,24 @@ class RtmpDemo
 
     /** 客户端读事件没问题 */
     public function flvRead($fd){
-        var_dump($fd);
-        $buffer = '';
-        while (!feof($fd)){
-            $buffer = fread($fd,1024);
+        $buffer = fread($fd,1024);
+        $originData = json_decode($buffer,true);
+        if (!empty($originData)){
+            var_dump($originData);
+            $cmd = $originData['cmd'];
+            $socket = $originData['socket'];
+            $data = $originData['data'];
+            if ($cmd == 'play'){
+                if ($data['hasPublishStream'] == false){
+                    $back = new Response(
+                        404,
+                        ['Content-Type' => 'text/plain','Access-Control-Allow-Origin' => '*',],
+                        "Stream not found."
+                    );
+                    fwrite(self::$playerClients[$socket],$back->__toString());
+                }
+            }
         }
-        //var_dump($buffer);
-
-//        $originData = json_decode($buffer,true);
-//        if (!empty($originData)){
-//            $cmd = $originData['cmd'];
-//            $socket = $originData['socket'];
-//            $data = $originData['data'];
-//            if ($cmd == 'play'){
-//                if ($data['hasPublishStream'] == false){
-//                    $back = new Response(
-//                        404,
-//                        ['Content-Type' => 'text/plain','Access-Control-Allow-Origin' => '*',],
-//                        "Stream not found."
-//                    );
-//                    fwrite(self::$playerClients[$socket],$back->__toString());
-//                }
-//            }
-//        }
 
 
     }
@@ -474,16 +468,10 @@ class RtmpDemo
      * @comment 这里是服务器
      */
     public function gatewayWrite($fd){
-
         $buffer = array_shift(self::$gatewayBuffer);
         if (!empty($buffer)){
-
-            var_dump("需要向客户端发送数据",$fd);
-            //$string = json_encode($buffer);
-            //fwrite($fd,$string,strlen($string));
-            /** 这里为什么不可以写 ，导致客户端崩溃 */
-            fwrite($fd,'123');
-            var_dump("已经向客户端发送了数据 123");
+            $string = json_encode($buffer);
+            fwrite($fd,$string,strlen($string));
         }
     }
 
