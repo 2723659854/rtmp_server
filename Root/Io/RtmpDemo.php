@@ -2,9 +2,16 @@
 
 namespace Root\Io;
 
+use MediaServer\Flv\Flv;
+use MediaServer\Flv\FlvTag;
 use MediaServer\Http\HttpWMServer;
+use MediaServer\MediaReader\AudioFrame;
+use MediaServer\MediaReader\MediaFrame;
+use MediaServer\MediaReader\MetaDataFrame;
+use MediaServer\MediaReader\VideoFrame;
 use MediaServer\MediaServer;
 use Root\Protocols\Http;
+use Root\Protocols\Http\Chunk;
 use Root\Response;
 use Root\rtmp\TcpConnection;
 
@@ -285,14 +292,13 @@ class RtmpDemo
                                 }
 
                                 /** 网关服务器 保存flv客户端，使用tcp协议 ，添加可读事件 */
-                                if (self::$gateway&&$fd==self::$gateway){
+                                if (self::$gateway && $fd == self::$gateway) {
                                     $connection->protocol = 'gateway';
                                     /** 单独保存flv的客户端 */
                                     RtmpDemo::$flvClients[(int)$clientSocket] = $clientSocket;
                                     /** 这个服务端的作用是，把rtmp服务器的数据转发给客户端 ，那么就是可写事件 */
-                                    self::add($clientSocket,self::EV_READ,[$this,'gatewayRead']);
-                                    self::add($clientSocket,self::EV_WRITE,[$this,'gatewayWrite']);
-                                    var_dump("客户端连接上了",$clientSocket);
+                                    self::add($clientSocket, self::EV_READ, [$this, 'gatewayRead']);
+                                    self::add($clientSocket, self::EV_WRITE, [$this, 'gatewayWrite']);
                                 }
 
                                 /** rtmp 服务 长链接 协议直接处理了数据，不会触发onMessage事件，无需设置onMessage */
@@ -338,7 +344,6 @@ class RtmpDemo
     public static $gateway = null;
 
 
-
     /** 创建flv客户端和网关建立链接 */
     public function createFlvClient()
     {
@@ -350,7 +355,7 @@ class RtmpDemo
         $socket = @stream_socket_client("tcp://127.0.0.1:8800", $errno, $errstr, 3, STREAM_CLIENT_ASYNC_CONNECT, $context);
         /** 涉及到socket通信的地方，调用RuntimeException都会导致进程退出，抛出异常：Fatal error: Uncaught RuntimeException ，这是个很诡异的事情 */
         if ($errno) {
-            var_dump($errno,$errstr);
+            var_dump($errno, $errstr);
             return;
         }
         /** 设置位非阻塞状态 */
@@ -360,8 +365,8 @@ class RtmpDemo
 
         self::$flvClient = $socket;
         /** 给客户端创建读写事件 ,不需要想服务端发送任何数据 */
-        self::add(self::$flvClient,self::EV_READ,[$this,'flvRead']);
-        self::add(self::$flvClient,self::EV_WRITE,[$this,'flvWrite']);
+        self::add(self::$flvClient, self::EV_READ, [$this, 'flvRead']);
+        self::add(self::$flvClient, self::EV_WRITE, [$this, 'flvWrite']);
         /** 给网关服务器发送消息 */
         //fwrite(self::$flvClient,'hello');
 
@@ -384,44 +389,205 @@ class RtmpDemo
         $this->acceptFlv();
     }
 
-    /** 客户端读事件没问题 */
-    public function flvRead($fd){
-        $buffer = fread($fd,1024);
-        $originData = json_decode($buffer,true);
-        if (!empty($originData)){
-            var_dump($originData);
+    /** 记录每一个客户端请求的资源*/
+    public static array $clientWithPath;
+
+
+    public static $readBuffer = "";
+    /**
+     * 这里是flv客户端向播放器推送数据
+     * @param $fd
+     * @return void
+     * @comment 这里是客户端
+     */
+    public function flvRead($fd)
+    {
+        /** 这里有问题 ，接收流媒体数据的时候有问题 */
+        $buffer = '';
+        while (true){
+            $buffer .=fread($fd,1024);
+            if (strpos($buffer,"\r\n")){
+                break;
+            }
+        }
+        $originData = json_decode(trim($buffer,"\r\n"), true);
+        if (!empty($originData)) {
+            //var_dump("接收到服务端的数据",$originData);
             $cmd = $originData['cmd'];
             $socket = $originData['socket'];
             $data = $originData['data'];
-            if ($cmd == 'play'){
-                if ($data['hasPublishStream'] == false){
+            /** 请求播放 */
+            if ($cmd == 'play') {
+                if ($data['hasPublishStream'] == false) {
                     $back = new Response(
                         404,
-                        ['Content-Type' => 'text/plain','Access-Control-Allow-Origin' => '*',],
+                        ['Content-Type' => 'text/plain', 'Access-Control-Allow-Origin' => '*',],
                         "Stream not found."
                     );
-                    fwrite(self::$playerClients[$socket],$back->__toString());
+                    fwrite(self::$playerClients[$socket], $back->__toString());
+                } else {
+                    /** 初始化 */
+                    if (!isset(self::$flvVideoAndAudioDataQueue[$data['path']])) {
+                        self::$flvVideoAndAudioDataQueue[$data['path']] = [];
+                    }
+                    /** 存真实的客户端 */
+                    self::$clientWithPath[$data['path']][] = self::$playerClients[$socket]??null;
+                }
+            }
+            /** 转发音视频数据 */
+            if ($cmd == 'frame') {
+                $type = $data['type'];
+                $timestamp = $data['timestamp'];
+                $hexData = $data['frame'];
+                $path = $data['path'];
+                if ($type == MediaFrame::VIDEO_FRAME){
+                    $frame = new VideoFrame(hex2bin($hexData),$timestamp);
+                }
+                if ($type == MediaFrame::AUDIO_FRAME){
+                    $frame = new AudioFrame(hex2bin($hexData),$timestamp);
+                }
+                if ($type == MediaFrame::META_FRAME){
+                    $frame = new MetaDataFrame(hex2bin($hexData));
+                }
+
+                //$needSendDataClient = array_intersect(self::$playerClients,self::$clientWithPath[$path]);
+                foreach (self::$playerClients as $client){
+                    if (is_resource($client)){
+                        //var_dump("要给客户端发送数据呢");
+                        //todo 发送数据给客户端
+                        $this->frameSend($frame,$client);
+                    }else{
+                        unset(self::$playerClients[(int)$client]);
+
+                        //todo 从客户端播放路径数组删除
+                    }
                 }
             }
         }
-
-
     }
-    /** 客户端需要发送的数据 */
-    public static array $writeBuffer = [];
+
+
+
+    /**
+     * 发送数据到客户端
+     * @param $frame MediaFrame
+     * @return mixed
+     * @comment 发送音频，视频，元数据
+     */
+    public function frameSend($frame,$client)
+    {
+        //   logger()->info("send ".get_class($frame)." timestamp:".($frame->timestamp??0));
+        switch ($frame->FRAME_TYPE) {
+            case MediaFrame::VIDEO_FRAME:
+                return $this->sendVideoFrame($frame,$client);
+            case MediaFrame::AUDIO_FRAME:
+                return $this->sendAudioFrame($frame,$client);
+            case MediaFrame::META_FRAME:
+                return $this->sendMetaDataFrame($frame,$client);
+        }
+    }
+
+    /**
+     * 发送元数据
+     * @param $metaDataFrame MetaDataFrame|MediaFrame
+     * @return mixed
+     */
+    public function sendMetaDataFrame($metaDataFrame,$client)
+    {
+        /** 组装数据 */
+        $tag = new FlvTag();
+        $tag->type = Flv::SCRIPT_TAG;
+        $tag->timestamp = 0;
+        $tag->data = (string)$metaDataFrame;
+        $tag->dataSize = strlen($tag->data);
+        /** 将数据打包编码 */
+        $chunks = Flv::createFlvTag($tag);
+        /** 发送 */
+        $this->write($chunks,$client);
+    }
+
+    /**
+     * 发送音频帧
+     * @param $audioFrame AudioFrame|MediaFrame
+     * @return mixed
+     */
+    public function sendAudioFrame($audioFrame,$client)
+    {
+        $tag = new FlvTag();
+        $tag->type = Flv::AUDIO_TAG;
+        $tag->timestamp = $audioFrame->timestamp;
+        $tag->data = (string)$audioFrame;
+        $tag->dataSize = strlen($tag->data);
+        $chunks = Flv::createFlvTag($tag);
+        $this->write($chunks,$client);
+    }
+
+    public static $hasSendHeader = [];
+    /**
+     * 发送数据
+     * @param $data
+     * @return null
+     */
+    public function write($data,$client)
+    {
+        if (!isset(self::$hasSendHeader[(int)$client])){
+            $response = new Response(200,[
+                /** 禁止使用缓存 */
+                'Cache-Control' => 'no-cache',
+                /** 资源类型 flv */
+                'Content-Type' => 'video/x-flv',
+                /** 允许跨域 */
+                'Access-Control-Allow-Origin' => '*',
+                /** 长链接 */
+                'Connection' => 'keep-alive',
+                /** 数据是分块的，而不是告诉客户端数据的大小，通常用于流式传输 */
+                'Transfer-Encoding' => 'chunked'
+            ],$data);
+
+        }else{
+            self::$hasSendHeader[(int)$client] = 1;
+            $response = new Chunk($data);
+        }
+        fwrite($client,$response->__toString());
+    }
+
+    /**
+     * 发送视频帧
+     * @param $videoFrame VideoFrame|MediaFrame
+     * @return mixed
+     */
+    public function sendVideoFrame($videoFrame,$client)
+    {
+        $tag = new FlvTag();
+        $tag->type = Flv::VIDEO_TAG;
+        $tag->timestamp = $videoFrame->timestamp;
+        $tag->data = (string)$videoFrame;
+        $tag->dataSize = strlen($tag->data);
+        $chunks = Flv::createFlvTag($tag);
+        $this->write($chunks,$client);
+    }
+
 
     /**
      * 客户端向网关发送数据
      * @param $fd
      * @comment 法相服务端一直可读，会一直发送数据，这里要判断，只有当有数据的时候才发送，不然对面服务器要崩溃
      */
-    public function flvWrite($fd){
+    public function flvWrite($fd)
+    {
         $buffer = array_shift(self::$writeBuffer);
-        if (!empty($buffer)){
+        if (!empty($buffer)) {
             $string = json_encode($buffer);
-            fwrite($fd,$string,strlen($string));
+            fwrite($fd, $string, strlen($string));
         }
     }
+
+
+    /** flv代理暂存音视频数据队列 格式：path=>data */
+    public static $flvVideoAndAudioDataQueue = [];
+    /** 客户端需要发送的数据 */
+    public static array $writeBuffer = [];
+
 
 
     /**
@@ -429,49 +595,54 @@ class RtmpDemo
      * @param $fd
      * @comment 这里是主服务器
      */
-    public function gatewayRead($fd){
-        if (is_resource($fd)){
-            $buffer = fread($fd,1024);
-            if (!empty($buffer)){
-                var_dump($buffer);
-                $originData = json_decode($buffer,true);
-                var_dump($originData);
+    public function gatewayRead($fd)
+    {
+        if (is_resource($fd)) {
+            $buffer = fread($fd, 1024);
+            if (!empty($buffer)) {
+                $originData = json_decode($buffer, true);
             }
 
 
-            if (!empty($originData)){
+            if (!empty($originData)) {
                 $cmd = $originData['cmd'];
                 $data = $originData['data'];
                 $socket = $originData['socket'];
-                if ($cmd == 'play'){
+                if ($cmd == 'play') {
                     $path = $data['path'];
                     /** 回答客户端是否有这个播放资源 */
-                   self::$gatewayBuffer[] = [
-                       'cmd'=>'play',
-                       'socket'=>$socket,
-                       'data'=>[
-                           'path'=>$path,
-                           'hasPublishStream'=>MediaServer::hasPublishStream($path)
-                       ],
-                       'to'=>'client'
-                   ];
+                    self::$gatewayBuffer[] = [
+                        'cmd' => 'play',
+                        'socket' => $socket,
+                        'data' => [
+                            'path' => $path,
+                            'hasPublishStream' => MediaServer::hasPublishStream($path)
+                        ],
+                        'to' => 'client'
+                    ];
                 }
             }
 
         }
     }
+
     /** 服务端网关缓存 */
     public static array $gatewayBuffer = [];
+
     /**
      * 网关监测客户端可写事件
      * @param $fd
-     * @comment 这里是服务器
+     * @comment 这里是服务器发送给客户端
      */
-    public function gatewayWrite($fd){
+    public function gatewayWrite($fd)
+    {
         $buffer = array_shift(self::$gatewayBuffer);
-        if (!empty($buffer)){
-            $string = json_encode($buffer);
-            fwrite($fd,$string,strlen($string));
+        if (!empty($buffer)) {
+
+            /** 给协议加上结束符号 */
+            $string = json_encode($buffer)."\r\n";
+            fwrite($fd, $string, strlen($string));
+            var_dump("消息已发送给客户端",strlen($string));
         }
     }
 
@@ -480,6 +651,7 @@ class RtmpDemo
 
     /** 播放器客户端 */
     public static array $playerClients = [];
+
     /**
      * 接受客户端的链接，并处理数据
      */

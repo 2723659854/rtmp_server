@@ -9,6 +9,7 @@ use MediaServer\PushServer\PlayStreamInterface;
 use MediaServer\PushServer\PublishStreamInterface;
 use MediaServer\PushServer\VerifyAuthStreamInterface;
 use Root\HLSDemo;
+use Root\Io\RtmpDemo;
 
 
 /**
@@ -196,8 +197,19 @@ class MediaServer
      */
     static function publisherOnFrame(MediaFrame $frame, PublishStreamInterface $publisher)
     {
-        //todo 在这里转换hls协议 ,生成索引文件和切片文件，需要调试
-        HLSDemo::make($frame,$publisher->getPublishPath());
+
+        /** 将数据发送给连接了网关的客户端 ,发送原始数据*/
+        RtmpDemo::$gatewayBuffer[] = [
+            'cmd'=>'frame',
+            'socket'=>null,
+            'data'=>[
+                'path'=>$publisher->getPublishPath(),
+                'frame'=>bin2hex($frame->_data),
+                'timestamp'=>$frame->timestamp??0,
+                'type'=>$frame->FRAME_TYPE
+            ]
+        ];
+
         /** 获取这个媒体路径下的所有播放设备 */
         foreach (self::getPlayStreams($publisher->getPublishPath()) as $playStream) {
             /** 如果播放器不是空闲状态 */

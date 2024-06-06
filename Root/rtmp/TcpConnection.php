@@ -251,7 +251,6 @@ class TcpConnection extends ConnectionInterface
         $this->_remoteAddress           = $remote_address;
         /** 初始化链接的内容为空 */
         $this->context = new \stdClass;
-        var_dump("tcp实例化");
     }
 
     /**
@@ -522,7 +521,6 @@ class TcpConnection extends ConnectionInterface
      */
     public function baseRead($socket, $check_eof = true)
     {
-        var_dump("我被调用了");
         /** ssl 握手 */
         if ($this->transport === 'ssl' && $this->_sslHandshakeCompleted !== true) {
             if ($this->doSslHandshake($socket)) {
