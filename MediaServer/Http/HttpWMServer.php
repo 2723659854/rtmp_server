@@ -126,7 +126,7 @@ class HttpWMServer
             $this->findFlvGateway($request, $path) ||
             $this->findStaticFile($request, $path)
         ) {
-            return;
+            return ;
         }
 
         //api

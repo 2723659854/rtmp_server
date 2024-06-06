@@ -438,16 +438,17 @@ class RtmpDemo
             if ($cmd == 'frame') {
                 $type = $data['type'];
                 $timestamp = $data['timestamp'];
-                $hexData = $data['frame'];
+                $hexData = hex2bin($data['frame']);
+
                 $path = $data['path'];
                 if ($type == MediaFrame::VIDEO_FRAME){
-                    $frame = new VideoFrame(hex2bin($hexData),$timestamp);
+                    $frame = new VideoFrame(($hexData),$timestamp);
                 }
                 if ($type == MediaFrame::AUDIO_FRAME){
-                    $frame = new AudioFrame(hex2bin($hexData),$timestamp);
+                    $frame = new AudioFrame(($hexData),$timestamp);
                 }
                 if ($type == MediaFrame::META_FRAME){
-                    $frame = new MetaDataFrame(hex2bin($hexData));
+                    $frame = new MetaDataFrame(($hexData));
                 }
 
                 //$needSendDataClient = array_intersect(self::$playerClients,self::$clientWithPath[$path]);
@@ -531,6 +532,7 @@ class RtmpDemo
     public function write($data,$client)
     {
         if (!isset(self::$hasSendHeader[(int)$client])){
+            /** 感觉是这一步有问题 */
             $response = new Response(200,[
                 /** 禁止使用缓存 */
                 'Cache-Control' => 'no-cache',
@@ -541,14 +543,15 @@ class RtmpDemo
                 /** 长链接 */
                 'Connection' => 'keep-alive',
                 /** 数据是分块的，而不是告诉客户端数据的大小，通常用于流式传输 */
-                'Transfer-Encoding' => 'chunked'
+                'Transfer-Encoding' => 'chunked',
             ],$data);
 
         }else{
             self::$hasSendHeader[(int)$client] = 1;
             $response = new Chunk($data);
         }
-        fwrite($client,$response->__toString());
+
+        fwrite($client,$response->__toString(),strlen($response->__toString()));
     }
 
     /**
@@ -577,8 +580,14 @@ class RtmpDemo
     {
         $buffer = array_shift(self::$writeBuffer);
         if (!empty($buffer)) {
-            $string = json_encode($buffer);
-            fwrite($fd, $string, strlen($string));
+            if ($buffer['to']=='server'){
+                $string = json_encode($buffer);
+                fwrite($fd, $string, strlen($string));
+            }else{
+                $socket = $buffer['socket'];
+                $client = self::$playerClients[(int)$socket];
+                fwrite($client,$buffer['data']['buffer']);
+            }
         }
     }
 
@@ -638,11 +647,9 @@ class RtmpDemo
     {
         $buffer = array_shift(self::$gatewayBuffer);
         if (!empty($buffer)) {
-
             /** 给协议加上结束符号 */
             $string = json_encode($buffer)."\r\n";
             fwrite($fd, $string, strlen($string));
-            var_dump("消息已发送给客户端",strlen($string));
         }
     }
 
@@ -651,6 +658,8 @@ class RtmpDemo
 
     /** 播放器客户端 */
     public static array $playerClients = [];
+
+    public static array $clientTcpConnections = [];
 
     /**
      * 接受客户端的链接，并处理数据
@@ -707,6 +716,8 @@ class RtmpDemo
                                     new \MediaServer\Http\ExtHttpProtocol($connection);
                                     /** 保存播放器客户端 */
                                     self::$playerClients[(int)$clientSocket] = $clientSocket;
+                                    /** 保存链接 */
+                                    self::$clientTcpConnections[(int)$clientSocket] = $connection;
                                 }
 
                             } catch (\Exception|\RuntimeException $exception) {

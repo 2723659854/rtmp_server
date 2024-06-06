@@ -2,6 +2,7 @@
 
 namespace Root\Protocols;
 
+use Root\Protocols\Http\Chunk;
 use Root\rtmp\TcpConnection;
 use Root\Request;
 use Root\Response;
@@ -245,7 +246,6 @@ class Http
             static::sendStream($connection, $handler, $offset, $length);
             return '';
         }
-
         return (string)$response;
     }
 
