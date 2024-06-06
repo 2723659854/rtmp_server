@@ -20,7 +20,7 @@ class ExtHttpProtocol extends Http
         $this->protocol = $connection->protocol;
         $this->onMessage = $connection->onMessage;
         $this->onWebSocketConnect = $connection->onWebSocketConnect;
-        var_dump("设置完成");
+
     }
 
     /**

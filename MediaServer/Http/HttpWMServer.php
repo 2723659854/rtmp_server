@@ -59,20 +59,82 @@ class HttpWMServer
      */
     public function onHttpRequest(TcpConnection $connection, Request $request)
     {
-        var_dump("接受到数据");
-        switch ($request->method()) {
-            case "GET":
-                return $this->getHandler($request);
-            case "POST":
-                return $this->postHandler($request);
-            case "HEAD":
-                return $connection->send(new Response(200));
-            default:
-                logger()->warning("unknown method", ['method' => $request->method(), 'path' => $request->path()]);
-                return $connection->send(new Response(405));
+
+        /** 这里做特殊处理 ，判断这个客户端是否是链接的代理服务器，如果是，那么使用代理客户端请求服务端 */
+        if (isset(RtmpDemo::$playerClients[(int)$connection->getSocket()])){
+
+            var_dump("代理请求");
+            /** 请求代理服务器 */
+            switch ($request->method()) {
+                case "GET":
+                    return $this->getHandlerGateway($request,$connection);
+                case "HEAD":
+                    return $connection->send(new Response(200));
+                default:
+                    logger()->warning("unknown method", ['method' => $request->method(), 'path' => $request->path()]);
+                    return $connection->send(new Response(405));
+            }
+        }else{
+            var_dump("正常请求");
+            /** 请求主服务器 */
+            switch ($request->method()) {
+                case "GET":
+                    return $this->getHandler($request);
+                case "POST":
+                    return $this->postHandler($request);
+                case "HEAD":
+                    return $connection->send(new Response(200));
+                default:
+                    logger()->warning("unknown method", ['method' => $request->method(), 'path' => $request->path()]);
+                    return $connection->send(new Response(405));
+            }
         }
+
     }
 
+    /**
+     * 处理flv代理请求
+     * @param Request $request
+     * @return void
+     */
+    public function getHandlerGateway(Request $request,TcpConnection $connection)
+    {
+        $path = $request->path();
+
+        //api
+        if ($path === '/api') {
+            $name = $request->get('name');
+            $args = $request->get('args', []);
+            /** 这里应该是请求代理服务器 */
+            //$gatewayClient = RtmpDemo::$flvClient;
+            /** 数据存入缓存 */
+            RtmpDemo::$writeBuffer[] = ['data'=>['name'=>$name,'args'=>$args,],'cmd'=>'api','socket'=>(int)$connection->getSocket(),'to'=>'server'] ;
+            /** 将消息发送给网关 */
+            //fwrite($gatewayClient,$data,strlen($data));
+            /** 调用媒体服务的接口 */
+            //$data = MediaServer::callApi($name, $args);
+//            if (!is_null($data)) {
+//                $request->connection->send(new Response(200, ['Content-Type' => "application/json"], json_encode($data)));
+//            } else {
+//                $request->connection->send(new Response(404, [], '404 Not Found'));
+//            }
+            return;
+        }
+        //flv
+        if (
+            $this->unsafeUri($request, $path) ||
+            $this->findFlvGateway($request, $path) ||
+            $this->findStaticFile($request, $path)
+        ) {
+            return;
+        }
+
+        //api
+
+        //404
+        $request->connection->send(new Response(404, [], '404 Not Found'));
+        return;
+    }
 
     /**
      * 处理http的get请求
@@ -230,6 +292,27 @@ class HttpWMServer
         }
     }
 
+    //todo 两种方案，一种是转发flv 一种是转发rtmp，先尝试转发flv
+
+    /**
+     * 播放器请求网关请求播放flv
+     * @param Request $request
+     * @param $path
+     * @return bool
+     */
+    public function findFlvGateway(Request $request, $path)
+    {
+        if (!preg_match('/(.*)\.flv$/', $path, $matches)) {
+            return false;
+        } else {
+            list(, $flvPath) = $matches;
+            //$this->playMediaStream($request, $flvPath);
+
+            RtmpDemo::$writeBuffer[]=['cmd'=>'play','data'=>['path'=>$flvPath,],'socket'=>(int)$request->connection->getSocket(),'to'=>'server'];
+
+            return true;
+        }
+    }
 
     /**
      * 播放flv资源
