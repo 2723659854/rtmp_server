@@ -311,6 +311,11 @@ class HttpWMServer
             /** 不发送 */
             //RtmpDemo::$writeBuffer[]=['cmd'=>'play','data'=>['path'=>$flvPath,],'socket'=>(int)$request->connection->getSocket(),'to'=>'server'];
 
+
+            //RtmpDemo::instance()->startPlay($request->connection->getSocket());
+
+
+
             return true;
         }
     }

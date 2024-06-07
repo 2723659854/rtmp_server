@@ -509,6 +509,19 @@ class RtmpDemo
     /** 是否已经发送了第一个flv块*/
     public static $hasSendHeader = [];
 
+    public static $hasStartPlay = [];
+
+    public function startPlay($client)
+    {
+        if (!isset(self::$hasStartPlay[(int)$client])){
+            $flvHeader = "FLV\x01\x00" . pack('NN', 9, 0);
+            $flvHeader[4] = chr(ord($flvHeader[4]) | 4);
+            $flvHeader[4] = chr(ord($flvHeader[4]) | 1);
+            self::$hasStartPlay[(int)$client] = 1;
+            $this->write($flvHeader,$client);
+        }
+
+    }
     /**
      * 发送数据
      * @param $data
@@ -517,6 +530,7 @@ class RtmpDemo
      */
     public function write($data, $client)
     {
+
         /** 判断是否是发送第一个分块 */
         if (!isset(self::$hasSendHeader[(int)$client])) {
             /** 配置flv头 */
@@ -712,6 +726,8 @@ class RtmpDemo
                                     self::$playerClients[(int)$clientSocket] = $clientSocket;
                                     /** 保存链接 */
                                     self::$clientTcpConnections[(int)$clientSocket] = $connection;
+
+                                    $this->startPlay($clientSocket);
                                 }
 
                             } catch (\Exception|\RuntimeException $exception) {

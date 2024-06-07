@@ -23,17 +23,17 @@ trait RtmpVideoHandlerTrait
          * @var $p RtmpPacket
          */
         $p = $this->currentPacket;
-        /** 加入到队列 */
-        RtmpDemo::$gatewayBuffer[] = [
-            'cmd'=>'frame',
-            'socket'=>null,
-            'data'=>[
-                'path'=>$this->publishStreamPath,
-                'frame'=>$p->payload,
-                'timestamp'=>$p->clock,
-                'type'=>MediaFrame::VIDEO_FRAME
-            ]
-        ];
+//        /** 加入到队列 */
+//        RtmpDemo::$gatewayBuffer[] = [
+//            'cmd'=>'frame',
+//            'socket'=>null,
+//            'data'=>[
+//                'path'=>$this->publishStreamPath,
+//                'frame'=>$p->payload,
+//                'timestamp'=>$p->clock,
+//                'type'=>MediaFrame::VIDEO_FRAME
+//            ]
+//        ];
         /** 将视频数据存入视频帧包 */
         $videoFrame = new VideoFrame($p->payload, $p->clock);
 
