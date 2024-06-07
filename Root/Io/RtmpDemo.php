@@ -716,8 +716,10 @@ class RtmpDemo
                                     self::$playerClients[(int)$clientSocket] = $clientSocket;
                                     /** 保存链接 */
                                     self::$clientTcpConnections[(int)$clientSocket] = $connection;
-
+                                    /** 開始播放 */
                                     $this->startPlay($clientSocket);
+                                    //todo 還應該發送關鍵幀，但是呢，這完全是兩個進程，取不到數據，無法發送，交給了後面的額可讀事件處理，但是還是無法播放，
+                                    //todo 是我自己的方法，替換原來的播放方法。測試是否可以播放。不使用tcp發送數據
                                 }
 
                             } catch (\Exception|\RuntimeException $exception) {
