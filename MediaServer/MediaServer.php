@@ -4,7 +4,10 @@ namespace MediaServer;
 
 
 use Evenement\EventEmitter;
+use MediaServer\MediaReader\AudioFrame;
 use MediaServer\MediaReader\MediaFrame;
+use MediaServer\MediaReader\MetaDataFrame;
+use MediaServer\MediaReader\VideoFrame;
 use MediaServer\PushServer\PlayStreamInterface;
 use MediaServer\PushServer\PublishStreamInterface;
 use MediaServer\PushServer\VerifyAuthStreamInterface;
@@ -163,15 +166,15 @@ class MediaServer
     {
         /** 获取播放路径 */
         $path = $playerStream->getPlayPath();
-        /** 获取对象id 获取这个播放源的hash值 */
-        $objIndex = spl_object_id($playerStream);
-
-        /** 初始化这个路径下的播放设备数据 */
-        if (!isset(self::$playerStream[$path])) {
-            self::$playerStream[$path] = [];
-        }
-        /** 加入当前的播放设备 */
-        self::$playerStream[$path][$objIndex] = $playerStream;
+//        /** 获取对象id 获取这个播放源的hash值 */
+//        $objIndex = spl_object_id($playerStream);
+//
+//        /** 初始化这个路径下的播放设备数据 */
+//        if (!isset(self::$playerStream[$path])) {
+//            self::$playerStream[$path] = [];
+//        }
+//        /** 加入当前的播放设备 */
+//        self::$playerStream[$path][$objIndex] = $playerStream;
 
         /** 如果这一路媒体已经推流了 */
         if (self::hasPublishStream($path)) {
@@ -201,7 +204,33 @@ class MediaServer
         /** flv使用這個方法推流 */
         foreach (RtmpDemo::$playerClients as $client){
             if (is_resource($client)){
-                RtmpDemo::frameSend($frame,$client);
+                RtmpDemo::$gatewayBuffer[] = [
+                    'cmd'=>'frame',
+                    'socket'=>null,
+                    'data'=>[
+                        'path'=>$publisher->getPublishPath(),
+                        /** 这样子处理数据，解析出来不对 */
+                        //'frame'=>bin2hex($frame->_data),
+                        'frame'=>$frame->_buffer,
+                        'timestamp'=>$frame->timestamp??0,
+                        'type'=>$frame->FRAME_TYPE
+                    ]
+                ];
+                $string = $frame->FRAME_TYPE."\r\n".($frame->timestamp??0)."\r\n".$frame->_buffer."\r\n\r\n";
+                $type = $frame->FRAME_TYPE;
+                $timestamp = $frame->timestamp??0;
+                $data = $frame->_buffer;
+                /** 重構一個包測試 */
+                if ($type == MediaFrame::VIDEO_FRAME) {
+                    $_frame = new VideoFrame($data, $timestamp);
+                }
+                elseif ($type == MediaFrame::AUDIO_FRAME) {
+                    $_frame = new AudioFrame($data, $timestamp);
+                }
+                else{
+                    $_frame = new MetaDataFrame($data);
+                }
+                RtmpDemo::frameSend($_frame,$client);
             }
         }
         /** 获取这个媒体路径下的所有播放设备 */
@@ -276,25 +305,26 @@ class MediaServer
      public static function addPlayer($playerStream)
     {
         /** 获取流媒体对象的hash值 */
-        $objIndex = spl_object_id($playerStream);
+        //$objIndex = spl_object_id($playerStream);
         /** 获取播放路径 */
-        $path = $playerStream->getPlayPath();
+        //$path = $playerStream->getPlayPath();
         /** 播放器绑定关闭事件 */
         //on close event
-        $playerStream->on("on_close", function () use ($path, $objIndex) {
-            /** 删除播放器媒体资源 */
-            //echo "play on close", PHP_EOL;
-            self::delPlayerStream($path, $objIndex);
-        });
-        /** 保存播放器资源 */
+//        $playerStream->on("on_close", function () use ($path, $objIndex) {
+//            /** 删除播放器媒体资源 */
+//            //echo "play on close", PHP_EOL;
+//            self::delPlayerStream($path, $objIndex);
+//        });
+        /** 保存播放器资源 這一段代碼如果不加，就只會播放第一幀畫面 */
         self::addPlayerStream($playerStream);
 
         /** 判断当前是否有对应的推流设备 */
-        if (self::hasPublishStream($path)) {
-            $playerStream->startPlay();
-        }
+//        if (self::hasPublishStream($path)) {
+//            /** 如果調用這個方法，那麼瀏覽器顯示不支持，請使用flash播放 */
+//            $playerStream->startPlay();
+//        }
 
-        logger()->info(" add player {path}", ['path' => $path]);
+        //logger()->info(" add player {path}", ['path' => $path]);
 
     }
 

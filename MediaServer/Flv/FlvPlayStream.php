@@ -14,6 +14,7 @@ use MediaServer\PushServer\PlayStreamInterface;
 use MediaServer\Utils\WMChunkStreamInterface;
 use MediaServer\Utils\WMHttpChunkStream;
 use Root\Io\RtmpDemo;
+use Root\Request;
 use function chr;
 use function ord;
 
@@ -103,7 +104,7 @@ class FlvPlayStream extends EventEmitter implements PlayStreamInterface
      * @param $data
      * @return null
      */
-    public function write($data)
+    public function write2($data)
     {
         return $this->input->write($data);
 
@@ -117,7 +118,7 @@ class FlvPlayStream extends EventEmitter implements PlayStreamInterface
      * @return null
      * @comment 此方法没有错误，但是为什么不能播放
      */
-    public function writeCopy($data)
+    public function write($data)
     {
         $client = $this->input->connection->getSocket();
         /** 判断是否是发送第一个分块 */
@@ -200,13 +201,12 @@ class FlvPlayStream extends EventEmitter implements PlayStreamInterface
      * 此方法可用，說明不是數據的問題
      * @return void
      */
-    public function startPlay()
+    public static function startPlay2(Request $request,string $path)
     {
 
-        $client = $this->input->connection->getSocket();
+        $client = $request->connection->getSocket();
+        /** 發送啟動播放數據 */
         RtmpDemo::startPlay($client);
-        //各种发送数据包
-        $path = $this->getPlayPath();
         /** 获取推流的资源 */
         $publishStream = MediaServer::getPublishStream($path);
         /**
@@ -215,7 +215,6 @@ class FlvPlayStream extends EventEmitter implements PlayStreamInterface
          */
         if ($publishStream->isMetaData()) {
             $metaDataFrame = $publishStream->getMetaDataFrame();
-            //$this->sendMetaDataFrame($metaDataFrame);
             RtmpDemo::frameSend($metaDataFrame,$client);
         }
 
@@ -225,7 +224,6 @@ class FlvPlayStream extends EventEmitter implements PlayStreamInterface
          */
         if ($publishStream->isAVCSequence()) {
             $avcFrame = $publishStream->getAVCSequenceFrame();
-            //$this->sendVideoFrame($avcFrame);
             RtmpDemo::frameSend($avcFrame,$client);
         }
 
@@ -243,16 +241,9 @@ class FlvPlayStream extends EventEmitter implements PlayStreamInterface
         /**
          * 发送关键帧 經過測試，這個是必須要發送的，否則無法播放
          */
-        if ($this->isEnableGop()) {
-            foreach ($publishStream->getGopCacheQueue() as $frame) {
-                //$this->frameSend($frame);
-                RtmpDemo::frameSend($frame,$client);
-            }
+        foreach ($publishStream->getGopCacheQueue() as $frame) {
+            RtmpDemo::frameSend($frame,$client);
         }
-        /** 更新播放器状态为非空闲 */
-        //$this->isPlayerIdling = false;
-        /** 更新为正在播放 */
-        //$this->isPlaying = true;
 
     }
     /**
@@ -260,7 +251,7 @@ class FlvPlayStream extends EventEmitter implements PlayStreamInterface
      * @return void
      * @note 主业务逻辑
      */
-    public function startPlay2()
+    public function startPlay()
     {
         //各种发送数据包
         $path = $this->getPlayPath();

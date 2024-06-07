@@ -332,37 +332,13 @@ class HttpWMServer
         /** 检查是否已经有发布这个流媒体 */
         //check stream
         if (MediaServer::hasPublishStream($flvPath)) {
-            /** 如果是ws协议 */
-            if ($request->connection->protocol === Websocket::class) {
-                /** 修改ws缓冲区数据类型 为数组  */
-                $request->connection->websocketType = Websocket::BINARY_TYPE_ARRAYBUFFER;
-                /** 数据包 ws */
-                $throughStream = new WMWsChunkStream($request->connection);
-            } else {
-                /** 数据包 http ,這只是一個數據打包的方法， */
-                $throughStream = new WMHttpChunkStream($request->connection);
+            $p_stream = MediaServer::getPublishStream($flvPath);
+            if (!$p_stream->is_on_frame) {
+                /** 这一路流媒体资源开始推流 转发流量数据 */
+                $p_stream->on('on_frame', MediaServer::class.'::publisherOnFrame');
+                $p_stream->is_on_frame = true;
             }
-            /** 实例化flv播放资源 */
-            $playerStream = new FlvPlayStream($throughStream, $flvPath);
-            /** 是否关闭声音 */
-            $disableAudio = $request->get('disableAudio', false);
-            if ($disableAudio) {
-                $playerStream->setEnableAudio(false);
-            }
-            /** 是否关闭视频 */
-            $disableVideo = $request->get('disableVideo', false);
-            if ($disableVideo) {
-                $playerStream->setEnableVideo(false);
-            }
-            /** 是否要连续帧 */
-            $disableGop = $request->get('disableGop', false);
-            if ($disableGop) {
-                $playerStream->setEnableGop(false);
-            }
-            /** 添加播放器 */
-            MediaServer::addPlayer($playerStream);
-            //MediaServer::addPlayerStream($playerStream);
-            //RtmpDemo::startPlay($request->connection->getSocket());
+            FlvPlayStream::startPlay2($request,$flvPath);
         } else {
             /** 没有这一路推流资源 直接关闭链接或者发送404 */
             logger()->warning("Stream {path} not found", ['path' => $flvPath]);
