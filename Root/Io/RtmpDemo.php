@@ -435,7 +435,7 @@ class RtmpDemo
             }
             //var_dump($type.'-'.$timestamp.'-'.$important.'-'.$order);
             /** 保存关键帧 */
-            if ($important&&$order){
+            if ($important&&$order>0){
                 self::$importantFram[$order]=$frame;
             }
 
@@ -533,7 +533,7 @@ class RtmpDemo
             self::write($flvHeader,$client);
 
             /** 发送关键帧 */
-            if (self::$importantFram){
+            if (self::$importantFram&&count(self::$importantFram)==4){
                 foreach (self::$importantFram as $frame){
                     self::frameSend($frame,$client);
                 }
