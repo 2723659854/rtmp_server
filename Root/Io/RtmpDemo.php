@@ -395,6 +395,8 @@ class RtmpDemo
     /** 文件暂存区 */
     public static $readBuffer = "";
 
+    /** 关键帧 */
+    public static $importantFram = [];
 
     /**
      * 这里是flv客户端向播放器推送数据
@@ -417,7 +419,10 @@ class RtmpDemo
             $array = explode("\r\n",$content);
             $type = ($array[0]);
             $timestamp = ($array[1]);
-            $frame = $array[2];
+            $important = $array[2];
+            $order = $array[3];
+            $frame = $array[4];
+            //$string = $type."\r\n".$timestamp."\r\n".$important."\r\n".$order."\r\n".$frame."\r\n\r\n";
             /** 目前播放器可以拉流，缓冲数据，无法播放，不知道是什么原因 */
             if ($type == MediaFrame::VIDEO_FRAME) {
                 $frame = new VideoFrame($frame, $timestamp);
@@ -428,12 +433,29 @@ class RtmpDemo
             else{
                 $frame = new MetaDataFrame($frame);
             }
+            //var_dump($type.'-'.$timestamp.'-'.$important.'-'.$order);
+            /** 保存关键帧 */
+            if ($important&&$order){
+                self::$importantFram[$order]=$frame;
+            }
 
+            $needSend = [];
+            /** 发送关键帧 */
+            if (!empty(self::$importantFram)){
+                foreach (self::$importantFram as $frame){
+                   $needSend[]=$frame;
+                }
+            }
+
+            /** 发送普通数据 */
             foreach (self::$playerClients as $client) {
                 if (is_resource($client)) {
                     //var_dump("要给客户端发送数据呢");
                     //todo 发送数据给客户端
-                    $this->frameSend($frame, $client);
+                    foreach ($needSend as $small){
+                        $this->frameSend($small, $client);
+                    }
+
                 } else {
                     unset(self::$playerClients[(int)$client]);
 
@@ -453,16 +475,16 @@ class RtmpDemo
      * @return mixed
      * @comment 发送音频，视频，元数据
      */
-    public function frameSend($frame, $client)
+    public static function frameSend($frame, $client)
     {
         //   logger()->info("send ".get_class($frame)." timestamp:".($frame->timestamp??0));
         switch ($frame->FRAME_TYPE) {
             case MediaFrame::VIDEO_FRAME:
-                return $this->sendVideoFrame($frame, $client);
+                return self::sendVideoFrame($frame, $client);
             case MediaFrame::AUDIO_FRAME:
-                return $this->sendAudioFrame($frame, $client);
+                return self::sendAudioFrame($frame, $client);
             case MediaFrame::META_FRAME:
-                return $this->sendMetaDataFrame($frame, $client);
+                return self::sendMetaDataFrame($frame, $client);
         }
     }
 
@@ -471,7 +493,7 @@ class RtmpDemo
      * @param $metaDataFrame MetaDataFrame|MediaFrame
      * @return mixed
      */
-    public function sendMetaDataFrame($metaDataFrame, $client)
+    public static function sendMetaDataFrame($metaDataFrame, $client)
     {
         /** 组装数据 */
         $tag = new FlvTag();
@@ -482,7 +504,7 @@ class RtmpDemo
         /** 将数据打包编码 */
         $chunks = Flv::createFlvTag($tag);
         /** 发送 */
-        $this->write($chunks, $client);
+        self::write($chunks, $client);
     }
 
     /**
@@ -490,7 +512,7 @@ class RtmpDemo
      * @param $audioFrame AudioFrame|MediaFrame
      * @return mixed
      */
-    public function sendAudioFrame($audioFrame, $client)
+    public static function sendAudioFrame($audioFrame, $client)
     {
         $tag = new FlvTag();
         $tag->type = Flv::AUDIO_TAG;
@@ -498,7 +520,7 @@ class RtmpDemo
         $tag->data = (string)$audioFrame;
         $tag->dataSize = strlen($tag->data);
         $chunks = Flv::createFlvTag($tag);
-        $this->write($chunks, $client);
+        self::write($chunks, $client);
     }
 
     /** 是否已经发送了第一个flv块*/
@@ -508,15 +530,18 @@ class RtmpDemo
     public static $hasStartPlay = [];
 
     /** 开始播放命令 */
-    public function startPlay($client)
+    public static function startPlay($client)
     {
+
         if (!isset(self::$hasStartPlay[(int)$client])){
+            /** 首先发送开播命令 */
             $flvHeader = "FLV\x01\x00" . pack('NN', 9, 0);
             $flvHeader[4] = chr(ord($flvHeader[4]) | 4);
             $flvHeader[4] = chr(ord($flvHeader[4]) | 1);
+            self::write($flvHeader,$client);
             self::$hasStartPlay[(int)$client] = 1;
-            $this->write($flvHeader,$client);
         }
+
 
     }
     /**
@@ -525,9 +550,8 @@ class RtmpDemo
      * @return null
      * @comment 已验证过，此方法可以正确的传输flv数据，但是无法播放，那么问题就出在数据上，可能是数据转16进制，再转二进制出错了。
      */
-    public function write($data, $client)
+    public static function write($data, $client)
     {
-
         /** 判断是否是发送第一个分块 */
         if (!isset(self::$hasSendHeader[(int)$client])) {
             /** 配置flv头 */
@@ -554,7 +578,7 @@ class RtmpDemo
      * @param $videoFrame VideoFrame|MediaFrame
      * @return mixed
      */
-    public function sendVideoFrame($videoFrame, $client)
+    public static function sendVideoFrame($videoFrame, $client)
     {
         $tag = new FlvTag();
         $tag->type = Flv::VIDEO_TAG;
@@ -562,7 +586,7 @@ class RtmpDemo
         $tag->data = (string)$videoFrame;
         $tag->dataSize = strlen($tag->data);
         $chunks = Flv::createFlvTag($tag);
-        $this->write($chunks, $client);
+        self::write($chunks, $client);
     }
 
 
@@ -586,9 +610,6 @@ class RtmpDemo
         }
     }
 
-
-    /** flv代理暂存音视频数据队列 格式：path=>data */
-    public static $flvVideoAndAudioDataQueue = [];
     /** 客户端需要发送的数据 */
     public static array $writeBuffer = [];
 
@@ -611,6 +632,15 @@ class RtmpDemo
                 $socket = $originData['socket'];
                 if ($cmd == 'play') {
                     $path = $data['path'];
+
+                    /** 强制推流 */
+                    $p_stream = MediaServer::getPublishStream($path);
+                    if (!$p_stream->is_on_frame) {
+                        /** 这一路流媒体资源开始推流 转发流量数据 */
+                        $p_stream->on('on_frame', MediaServer::class.'::publisherOnFrame');
+                        $p_stream->is_on_frame = true;
+                    }
+
                     /** 回答客户端是否有这个播放资源 */
                     self::$gatewayBuffer[] = [
                         'cmd' => 'play',
@@ -643,9 +673,13 @@ class RtmpDemo
                 $type = $buffer['data']['type'];
                 $timestamp = $buffer['data']['timestamp'];
                 $data = $buffer['data']['frame'];
+                $important = $buffer['data']['important'];
+                $order = $buffer['data']['order'];
                 /** 使用http之类的文本分隔符 ，一整个报文之间用换行符分割 ，这个鸡儿协议真难搞 */
-                $string = $type."\r\n".$timestamp."\r\n".$data."\r\n\r\n";
-                fwrite($fd,$string);
+                $string = $type."\r\n".$timestamp."\r\n".$important."\r\n".$order."\r\n".$data."\r\n\r\n";
+                if (is_resource($fd)){
+                    @fwrite($fd,$string);
+                }
             }
 
         }
@@ -716,10 +750,8 @@ class RtmpDemo
                                     self::$playerClients[(int)$clientSocket] = $clientSocket;
                                     /** 保存链接 */
                                     self::$clientTcpConnections[(int)$clientSocket] = $connection;
-                                    /** 開始播放 */
-                                    $this->startPlay($clientSocket);
-                                    //todo 還應該發送關鍵幀，但是呢，這完全是兩個進程，取不到數據，無法發送，交給了後面的額可讀事件處理，但是還是無法播放，
-                                    //todo 是我自己的方法，替換原來的播放方法。測試是否可以播放。不使用tcp發送數據
+                                    /** 发送开播命令 */
+                                    self::startPlay($clientSocket);
                                 }
 
                             } catch (\Exception|\RuntimeException $exception) {

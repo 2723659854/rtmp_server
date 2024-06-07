@@ -108,7 +108,7 @@ class HttpWMServer
             /** 这里应该是请求代理服务器 */
             //$gatewayClient = RtmpDemo::$flvClient;
             /** 数据存入缓存 */
-            RtmpDemo::$writeBuffer[] = ['data'=>['name'=>$name,'args'=>$args,],'cmd'=>'api','socket'=>(int)$connection->getSocket(),'to'=>'server'] ;
+            //RtmpDemo::$writeBuffer[] = ['data'=>['name'=>$name,'args'=>$args,],'cmd'=>'api','socket'=>(int)$connection->getSocket(),'to'=>'server'] ;
             /** 将消息发送给网关 */
             //fwrite($gatewayClient,$data,strlen($data));
             /** 调用媒体服务的接口 */
@@ -317,6 +317,44 @@ class HttpWMServer
 
 
             return true;
+        }
+    }
+
+    /**
+     * 播放flv资源
+     * @param Request $request
+     * @param $flvPath
+     * @return void
+     * @comment 是这里实现flv播放的 和mediaServer产生关系的
+     */
+    public function playMediaStreamGateway(Request $request, $flvPath)
+    {
+        /** 检查是否已经有发布这个流媒体 */
+        //check stream
+        if (MediaServer::hasPublishStream($flvPath)) {
+            $p_stream = MediaServer::getPublishStream($flvPath);
+            if (!$p_stream->is_on_frame) {
+                /** 这一路流媒体资源开始推流 转发流量数据 */
+                $p_stream->on('on_frame', MediaServer::class.'::publisherOnFrame');
+                $p_stream->is_on_frame = true;
+            }
+            FlvPlayStream::startPlay2($request,$flvPath);
+        } else {
+            /** 没有这一路推流资源 直接关闭链接或者发送404 */
+            logger()->warning("Stream {path} not found", ['path' => $flvPath]);
+            if ($request->connection->protocol === Websocket::class) {
+                $request->connection->close();
+            } else {
+                /** 如果没有这个媒体资源，返回404，js一共会请求6次，若都是404，之后不会再自动发起请求 */
+                $request->connection->send(
+                    new Response(
+                        404,
+                        ['Content-Type' => 'text/plain','Access-Control-Allow-Origin' => '*',],
+                        "Stream not found."
+                    )
+                );
+            }
+
         }
     }
 

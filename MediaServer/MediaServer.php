@@ -200,10 +200,9 @@ class MediaServer
     static function publisherOnFrame(MediaFrame $frame, PublishStreamInterface $publisher)
     {
 
-        /** 将关键帧转发到网关 */
+        /** 将关键帧转发到网关 必须要先发送关键帧，播放器才可以正常播放 */
         if (self::$hasSendImportantFrame == false){
-            $publishStream = self::getPublishStream($publisher->getPublishPath());
-
+            $publishStream = $publisher;
             /**
              * 发送meta元数据 就是基本参数
              * meta data send
@@ -216,11 +215,11 @@ class MediaServer
                     'socket'=>null,
                     'data'=>[
                         'path'=>$publisher->getPublishPath(),
-                        /** 这样子处理数据，解析出来不对 */
-                        //'frame'=>bin2hex($frame->_data),
                         'frame'=>$frame->_buffer,
                         'timestamp'=>$frame->timestamp??0,
-                        'type'=>$frame->FRAME_TYPE
+                        'type'=>$frame->FRAME_TYPE,
+                        'important'=>1,
+                        'order'=>1
                     ]
                 ];
 
@@ -238,11 +237,11 @@ class MediaServer
                     'socket'=>null,
                     'data'=>[
                         'path'=>$publisher->getPublishPath(),
-                        /** 这样子处理数据，解析出来不对 */
-                        //'frame'=>bin2hex($frame->_data),
                         'frame'=>$frame->_buffer,
                         'timestamp'=>$frame->timestamp??0,
-                        'type'=>$frame->FRAME_TYPE
+                        'type'=>$frame->FRAME_TYPE,
+                        'important'=>1,
+                        'order'=>2
                     ]
                 ];
 
@@ -261,16 +260,15 @@ class MediaServer
                     'socket'=>null,
                     'data'=>[
                         'path'=>$publisher->getPublishPath(),
-                        /** 这样子处理数据，解析出来不对 */
-                        //'frame'=>bin2hex($frame->_data),
                         'frame'=>$frame->_buffer,
                         'timestamp'=>$frame->timestamp??0,
-                        'type'=>$frame->FRAME_TYPE
+                        'type'=>$frame->FRAME_TYPE,
+                        'important'=>1,
+                        'order'=>3
                     ]
                 ];
             }
 
-            //gop 发送
             /**
              * 发送关键帧
              */
@@ -281,28 +279,30 @@ class MediaServer
                     'socket'=>null,
                     'data'=>[
                         'path'=>$publisher->getPublishPath(),
-                        /** 这样子处理数据，解析出来不对 */
-                        //'frame'=>bin2hex($frame->_data),
                         'frame'=>$frame->_buffer,
                         'timestamp'=>$frame->timestamp??0,
-                        'type'=>$frame->FRAME_TYPE
+                        'type'=>$frame->FRAME_TYPE,
+                        'important'=>1,
+                        'order'=>4
                     ]
                 ];
             }
 
             self::$hasSendImportantFrame =  true;
         }
+
+
         /** 将数据发送给连接了网关的客户端 ,发送原始数据 */
         RtmpDemo::$gatewayBuffer[] = [
             'cmd'=>'frame',
             'socket'=>null,
             'data'=>[
                 'path'=>$publisher->getPublishPath(),
-                /** 这样子处理数据，解析出来不对 */
-                //'frame'=>bin2hex($frame->_data),
                 'frame'=>$frame->_buffer,
                 'timestamp'=>$frame->timestamp??0,
-                'type'=>$frame->FRAME_TYPE
+                'type'=>$frame->FRAME_TYPE,
+                'important'=>0,
+                'order'=>0
             ]
         ];
 
