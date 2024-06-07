@@ -439,29 +439,12 @@ class RtmpDemo
                 self::$importantFram[$order]=$frame;
             }
 
-            $needSend = [];
-            /** 发送关键帧 */
-            if (!empty(self::$importantFram)){
-                foreach (self::$importantFram as $frame){
-                   $needSend[]=$frame;
-                }
-            }
-
-
             /** 发送普通数据 */
             foreach (self::$playerClients as $client) {
                 if (is_resource($client)) {
-                    self::startPlay($client);
-                    //var_dump("要给客户端发送数据呢");
-                    //todo 发送数据给客户端
-                    foreach ($needSend as $small){
-                        $this->frameSend($small, $client);
-                    }
-
+                    self::frameSend($frame, $client);
                 } else {
                     unset(self::$playerClients[(int)$client]);
-
-                    //todo 从客户端播放路径数组删除
                 }
             }
 
