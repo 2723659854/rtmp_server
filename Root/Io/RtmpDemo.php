@@ -273,6 +273,17 @@ class RtmpDemo
                                 /** 通信协议 */
                                 $connection->transport = $this->transport;
                                 /** 如果是flv的链接 就设置为http的协议 flv是长链接 */
+//                                if (self::$flvServerSocket && $fd == self::$flvServerSocket) {
+//                                    $connection->protocol = \MediaServer\Http\ExtHttpProtocol::class;
+//                                    /** 支持http的flv播放 onMessage事件处理请求数据，使用ExtHttp协议处理数据， */
+//                                    $connection->onMessage = [new HttpWMServer(), 'onHttpRequest'];
+//                                    /** 支持ws的flv播放 onWebSocketConnect事件处理请求数据 ，如果是ws链接，
+//                                     * ExtHttpProtocol协议自动切换为ws链接，然后在握手后调用ws链接事件，添加播放设备，返回握手信息 ，
+//                                     * 后续媒体MediaServer使用ws链接返回媒体数据给链接
+//                                     */
+//                                    $connection->onWebSocketConnect = [new HttpWMServer(), 'onWebsocketRequest'];
+//                                }
+
                                 if (self::$flvServerSocket && $fd == self::$flvServerSocket) {
                                     $connection->protocol = \MediaServer\Http\ExtHttpProtocol::class;
                                     /** 支持http的flv播放 onMessage事件处理请求数据，使用ExtHttp协议处理数据， */
@@ -281,8 +292,20 @@ class RtmpDemo
                                      * ExtHttpProtocol协议自动切换为ws链接，然后在握手后调用ws链接事件，添加播放设备，返回握手信息 ，
                                      * 后续媒体MediaServer使用ws链接返回媒体数据给链接
                                      */
-                                    $connection->onWebSocketConnect = [new HttpWMServer(), 'onWebsocketRequest'];
+                                    //$connection->onWebSocketConnect = [new HttpWMServer(), 'onWebsocketRequest'];
+
+                                    new \MediaServer\Http\ExtHttpProtocol($connection);
+                                    /** 保存播放器客户端 */
+                                    //self::$playerClients[(int)$clientSocket] = $clientSocket;
+                                    /** 保存链接 */
+                                    //self::$clientTcpConnections[(int)$clientSocket] = $connection;
+                                    /** 開始播放 */
+                                    //$this->startPlay($clientSocket);
+                                    self::$playerClients[(int)$clientSocket] = $clientSocket;
+
                                 }
+
+
                                 /** web服务器使用http协议 hls是短连接*/
                                 if (self::$webServerSocket && $fd == self::$webServerSocket) {
                                     /** 更换协议为http */
@@ -453,16 +476,19 @@ class RtmpDemo
      * @return mixed
      * @comment 发送音频，视频，元数据
      */
-    public function frameSend($frame, $client)
+    public static function frameSend($frame, $client)
     {
         //   logger()->info("send ".get_class($frame)." timestamp:".($frame->timestamp??0));
         switch ($frame->FRAME_TYPE) {
             case MediaFrame::VIDEO_FRAME:
-                return $this->sendVideoFrame($frame, $client);
+                //var_dump("發送視頻幀");
+                return self::sendVideoFrame($frame, $client);
             case MediaFrame::AUDIO_FRAME:
-                return $this->sendAudioFrame($frame, $client);
+                //var_dump("發送音頻幀");
+                return self::sendAudioFrame($frame, $client);
             case MediaFrame::META_FRAME:
-                return $this->sendMetaDataFrame($frame, $client);
+                //var_dump("發送媒體數據");
+                return self::sendMetaDataFrame($frame, $client);
         }
     }
 
@@ -471,7 +497,7 @@ class RtmpDemo
      * @param $metaDataFrame MetaDataFrame|MediaFrame
      * @return mixed
      */
-    public function sendMetaDataFrame($metaDataFrame, $client)
+    public static function sendMetaDataFrame($metaDataFrame, $client)
     {
         /** 组装数据 */
         $tag = new FlvTag();
@@ -482,7 +508,7 @@ class RtmpDemo
         /** 将数据打包编码 */
         $chunks = Flv::createFlvTag($tag);
         /** 发送 */
-        $this->write($chunks, $client);
+        self::write($chunks, $client);
     }
 
     /**
@@ -490,7 +516,7 @@ class RtmpDemo
      * @param $audioFrame AudioFrame|MediaFrame
      * @return mixed
      */
-    public function sendAudioFrame($audioFrame, $client)
+    public static function sendAudioFrame($audioFrame, $client)
     {
         $tag = new FlvTag();
         $tag->type = Flv::AUDIO_TAG;
@@ -498,7 +524,7 @@ class RtmpDemo
         $tag->data = (string)$audioFrame;
         $tag->dataSize = strlen($tag->data);
         $chunks = Flv::createFlvTag($tag);
-        $this->write($chunks, $client);
+        self::write($chunks, $client);
     }
 
     /** 是否已经发送了第一个flv块*/
@@ -508,14 +534,14 @@ class RtmpDemo
     public static $hasStartPlay = [];
 
     /** 开始播放命令 */
-    public function startPlay($client)
+    public static function startPlay($client)
     {
         if (!isset(self::$hasStartPlay[(int)$client])){
             $flvHeader = "FLV\x01\x00" . pack('NN', 9, 0);
             $flvHeader[4] = chr(ord($flvHeader[4]) | 4);
             $flvHeader[4] = chr(ord($flvHeader[4]) | 1);
             self::$hasStartPlay[(int)$client] = 1;
-            $this->write($flvHeader,$client);
+            self::write($flvHeader,$client);
         }
 
     }
@@ -525,7 +551,7 @@ class RtmpDemo
      * @return null
      * @comment 已验证过，此方法可以正确的传输flv数据，但是无法播放，那么问题就出在数据上，可能是数据转16进制，再转二进制出错了。
      */
-    public function write($data, $client)
+    public static function write($data, $client)
     {
 
         /** 判断是否是发送第一个分块 */
@@ -554,7 +580,7 @@ class RtmpDemo
      * @param $videoFrame VideoFrame|MediaFrame
      * @return mixed
      */
-    public function sendVideoFrame($videoFrame, $client)
+    public static function sendVideoFrame($videoFrame, $client)
     {
         $tag = new FlvTag();
         $tag->type = Flv::VIDEO_TAG;
@@ -562,7 +588,7 @@ class RtmpDemo
         $tag->data = (string)$videoFrame;
         $tag->dataSize = strlen($tag->data);
         $chunks = Flv::createFlvTag($tag);
-        $this->write($chunks, $client);
+        self::write($chunks, $client);
     }
 
 

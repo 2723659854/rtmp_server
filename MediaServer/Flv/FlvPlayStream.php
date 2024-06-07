@@ -13,6 +13,7 @@ use MediaServer\MediaServer;
 use MediaServer\PushServer\PlayStreamInterface;
 use MediaServer\Utils\WMChunkStreamInterface;
 use MediaServer\Utils\WMHttpChunkStream;
+use Root\Io\RtmpDemo;
 use function chr;
 use function ord;
 
@@ -195,12 +196,67 @@ class FlvPlayStream extends EventEmitter implements PlayStreamInterface
     }
 
 
+    public function startPlay()
+    {
+
+        $client = $this->input->connection->getSocket();
+        RtmpDemo::startPlay($client);
+        //各种发送数据包
+        $path = $this->getPlayPath();
+        /** 获取推流的资源 */
+        $publishStream = MediaServer::getPublishStream($path);
+        /**
+         * 发送meta元数据 就是基本参数
+         * meta data send
+         */
+        if ($publishStream->isMetaData()) {
+            $metaDataFrame = $publishStream->getMetaDataFrame();
+            //$this->sendMetaDataFrame($metaDataFrame);
+            RtmpDemo::frameSend($metaDataFrame,$client);
+        }
+
+        /**
+         * 发送视频avc数据
+         * avc sequence send
+         */
+        if ($publishStream->isAVCSequence()) {
+            $avcFrame = $publishStream->getAVCSequenceFrame();
+            //$this->sendVideoFrame($avcFrame);
+            RtmpDemo::frameSend($avcFrame,$client);
+        }
+
+
+        /**
+         * 发送音频aac数据
+         * aac sequence send
+         */
+        if ($publishStream->isAACSequence()) {
+            $aacFrame = $publishStream->getAACSequenceFrame();
+            RtmpDemo::frameSend($aacFrame,$client);
+        }
+
+        //gop 发送
+        /**
+         * 发送关键帧
+         */
+        if ($this->isEnableGop()) {
+            foreach ($publishStream->getGopCacheQueue() as &$frame) {
+                //$this->frameSend($frame);
+                RtmpDemo::frameSend($frame,$client);
+            }
+        }
+        /** 更新播放器状态为非空闲 */
+        $this->isPlayerIdling = false;
+        /** 更新为正在播放 */
+        $this->isPlaying = true;
+
+    }
     /**
      * 开始播放
      * @return void
      * @note 主业务逻辑
      */
-    public function startPlay()
+    public function startPlay2()
     {
         //各种发送数据包
         $path = $this->getPlayPath();

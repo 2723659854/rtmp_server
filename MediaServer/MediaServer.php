@@ -22,7 +22,7 @@ class MediaServer
      * 事件触发器
      * @var EventEmitter
      */
-    static protected $eventEmitter;
+    public static $eventEmitter;
 
 
     /**
@@ -31,7 +31,7 @@ class MediaServer
      * @param $arguments
      * @return mixed
      */
-    static function __callStatic($name, $arguments)
+    public static function __callStatic($name, $arguments)
     {
         /** 初始化事件触发器 */
         if (!self::$eventEmitter) {
@@ -46,7 +46,7 @@ class MediaServer
      * @var PublishStreamInterface[]
      * @comment 从代码中可以看出，所有的推流资源都存放在内存中，所以直播比较消耗内存
      */
-    static public $publishStream = [];
+    public static $publishStream = [];
 
     /**
      * 调用本对象的api
@@ -54,7 +54,7 @@ class MediaServer
      * @param $args
      * @return array|false
      */
-    static public function callApi($name,$args = []){
+    public static function callApi($name,$args = []){
         switch ($name){
             case 'listPushStream':
                 return self::listPushStream(...$args);
@@ -68,7 +68,7 @@ class MediaServer
      * @param $path
      * @return array
      */
-    static public function  listPushStream($path = null){
+    public static function  listPushStream($path = null){
         if($path){
             return isset(self::$publishStream[$path])?[
                 self::$publishStream[$path]->getPublishStreamInfo()
@@ -84,7 +84,7 @@ class MediaServer
      * @param $path
      * @return bool
      */
-    static public function hasPublishStream($path)
+    public static function hasPublishStream($path)
     {
         return isset(self::$publishStream[$path]);
     }
@@ -94,7 +94,7 @@ class MediaServer
      * @param $path
      * @return PublishStreamInterface
      */
-    static public function getPublishStream($path)
+    public static function getPublishStream($path)
     {
         return self::$publishStream[$path];
     }
@@ -103,7 +103,7 @@ class MediaServer
      * 添加某一路推流资源
      * @param $stream PublishStreamInterface
      */
-    static protected function addPublishStream($stream)
+    public static function addPublishStream($stream)
     {
         $path = $stream->getPublishPath();
         self::$publishStream[$path] = $stream;
@@ -114,10 +114,8 @@ class MediaServer
      * @param $path
      * @return void
      */
-    static protected function delPublishStream($path)
+    public static function delPublishStream($path)
     {
-        /** 清除ts文件缓存，防止重新开播的时候还有上一次直播的数据 */
-        HLSDemo::close($path);
         unset(self::$publishStream[$path]);
     }
 
@@ -132,7 +130,7 @@ class MediaServer
      * @param $path
      * @return array|PlayStreamInterface[]
      */
-    static public function getPlayStreams($path)
+    public static function getPlayStreams($path)
     {
         return self::$playerStream[$path] ?? [];
     }
@@ -144,7 +142,7 @@ class MediaServer
      * @param $objId
      * @comment  从这里的代码逻辑可以知道，只要有播放设备接入，才会转发数据
      */
-    static protected function delPlayerStream($path, $objId)
+    public static function delPlayerStream($path, $objId)
     {
         unset(self::$playerStream[$path][$objId]);
         //一个播放设备都没有
@@ -161,7 +159,7 @@ class MediaServer
      * 有播放设备接入，添加播放流媒体源
      * @param $playerStream PlayStreamInterface
      */
-    static protected function addPlayerStream($playerStream)
+    public static function addPlayerStream($playerStream)
     {
         /** 获取播放路径 */
         $path = $playerStream->getPlayPath();
@@ -190,130 +188,30 @@ class MediaServer
 
     /** 播放之前需要先依次 发送 meta元数据 就是基本参数 发送视频avc数据 发送音频aac数据 发送关键帧*/
 
-    public static bool $hasSendImportantFrame = false;
+    public static bool $hasSendImportantFrame = true;
     /**
      * 转发流媒体数据
      * @param $publisher PublishStreamInterface 发布者 可以是音频，可以是视频
      * @param $frame MediaFrame 这个是流媒体数据包，比如音频或者视频
      * @comment rtmp服务端转发数据的关键就是这个方法
      */
-    static function publisherOnFrame(MediaFrame $frame, PublishStreamInterface $publisher)
+    public static function publisherOnFrame(MediaFrame $frame, PublishStreamInterface $publisher)
     {
 
-        /** 将关键帧转发到网关 */
-        if (self::$hasSendImportantFrame == false){
-            $publishStream = self::getPublishStream($publisher->getPublishPath());
-
-            /**
-             * 发送meta元数据 就是基本参数
-             * meta data send
-             */
-            if ($publishStream->isMetaData()) {
-                $frame = $publishStream->getMetaDataFrame();
-                /** 将数据发送给连接了网关的客户端 ,发送原始数据*/
-                RtmpDemo::$gatewayBuffer[] = [
-                    'cmd'=>'frame',
-                    'socket'=>null,
-                    'data'=>[
-                        'path'=>$publisher->getPublishPath(),
-                        /** 这样子处理数据，解析出来不对 */
-                        //'frame'=>bin2hex($frame->_data),
-                        'frame'=>$frame->_buffer,
-                        'timestamp'=>$frame->timestamp??0,
-                        'type'=>$frame->FRAME_TYPE
-                    ]
-                ];
-
+        /** flv使用這個方法推流 */
+        foreach (RtmpDemo::$playerClients as $client){
+            if (is_resource($client)){
+                RtmpDemo::frameSend($frame,$client);
             }
-
-            /**
-             * 发送视频avc数据
-             * avc sequence send
-             */
-            if ($publishStream->isAVCSequence()) {
-                $frame = $publishStream->getAVCSequenceFrame();
-                /** 将数据发送给连接了网关的客户端 ,发送原始数据*/
-                RtmpDemo::$gatewayBuffer[] = [
-                    'cmd'=>'frame',
-                    'socket'=>null,
-                    'data'=>[
-                        'path'=>$publisher->getPublishPath(),
-                        /** 这样子处理数据，解析出来不对 */
-                        //'frame'=>bin2hex($frame->_data),
-                        'frame'=>$frame->_buffer,
-                        'timestamp'=>$frame->timestamp??0,
-                        'type'=>$frame->FRAME_TYPE
-                    ]
-                ];
-
-            }
-
-
-            /**
-             * 发送音频aac数据
-             * aac sequence send
-             */
-            if ($publishStream->isAACSequence()) {
-                $frame = $publishStream->getAACSequenceFrame();
-                /** 将数据发送给连接了网关的客户端 ,发送原始数据*/
-                RtmpDemo::$gatewayBuffer[] = [
-                    'cmd'=>'frame',
-                    'socket'=>null,
-                    'data'=>[
-                        'path'=>$publisher->getPublishPath(),
-                        /** 这样子处理数据，解析出来不对 */
-                        //'frame'=>bin2hex($frame->_data),
-                        'frame'=>$frame->_buffer,
-                        'timestamp'=>$frame->timestamp??0,
-                        'type'=>$frame->FRAME_TYPE
-                    ]
-                ];
-            }
-
-            //gop 发送
-            /**
-             * 发送关键帧
-             */
-            foreach ($publishStream->getGopCacheQueue() as $frame) {
-                /** 将数据发送给连接了网关的客户端 ,发送原始数据*/
-                RtmpDemo::$gatewayBuffer[] = [
-                    'cmd'=>'frame',
-                    'socket'=>null,
-                    'data'=>[
-                        'path'=>$publisher->getPublishPath(),
-                        /** 这样子处理数据，解析出来不对 */
-                        //'frame'=>bin2hex($frame->_data),
-                        'frame'=>$frame->_buffer,
-                        'timestamp'=>$frame->timestamp??0,
-                        'type'=>$frame->FRAME_TYPE
-                    ]
-                ];
-            }
-
-            self::$hasSendImportantFrame =  true;
         }
-        /** 将数据发送给连接了网关的客户端 ,发送原始数据 */
-        RtmpDemo::$gatewayBuffer[] = [
-            'cmd'=>'frame',
-            'socket'=>null,
-            'data'=>[
-                'path'=>$publisher->getPublishPath(),
-                /** 这样子处理数据，解析出来不对 */
-                //'frame'=>bin2hex($frame->_data),
-                'frame'=>$frame->_buffer,
-                'timestamp'=>$frame->timestamp??0,
-                'type'=>$frame->FRAME_TYPE
-            ]
-        ];
-
         /** 获取这个媒体路径下的所有播放设备 */
-        foreach (self::getPlayStreams($publisher->getPublishPath()) as $playStream) {
-            /** 如果播放器不是空闲状态 */
-            if (!$playStream->isPlayerIdling()) {
-                /** 转发数据包给播放器 */
-                $playStream->frameSend($frame);
-            }
-        }
+//        foreach (self::getPlayStreams($publisher->getPublishPath()) as $playStream) {
+//            /** 如果播放器不是空闲状态 */
+//            if (!$playStream->isPlayerIdling()) {
+//                /** 转发数据包给播放器 */
+//                $playStream->frameSend($frame);
+//            }
+//        }
     }
 
 
@@ -323,7 +221,7 @@ class MediaServer
      * @return bool
      * @comment 有推流数据加入进来
      */
-    static public function addPublish(PublishStreamInterface $stream): bool
+     public static function addPublish(PublishStreamInterface $stream): bool
     {
         /** 获取推流路径  */
         $path = $stream->getPublishPath();
@@ -366,7 +264,6 @@ class MediaServer
 
         logger()->info(" add publisher {path}", ['path' => $path]);
 
-        //TODO 生成m3u8索引文件
         return true;
 
     }
@@ -376,7 +273,7 @@ class MediaServer
      * @param PlayStreamInterface $playerStream
      * @comment 有播放器接入
      */
-    static public function addPlayer($playerStream)
+     public static function addPlayer($playerStream)
     {
         /** 获取流媒体对象的hash值 */
         $objIndex = spl_object_id($playerStream);
@@ -406,7 +303,7 @@ class MediaServer
      * @return bool
      * @comment 就很离谱，没有鉴权
      */
-    static public function verifyAuth($stream)
+     public static function verifyAuth($stream)
     {
         return true;
     }

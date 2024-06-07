@@ -123,7 +123,7 @@ class HttpWMServer
         //flv
         if (
             $this->unsafeUri($request, $path) ||
-            $this->findFlvGateway($request, $path) ||
+            $this->findFlv($request, $path) ||
             $this->findStaticFile($request, $path)
         ) {
             return ;
@@ -339,7 +339,7 @@ class HttpWMServer
                 /** 数据包 ws */
                 $throughStream = new WMWsChunkStream($request->connection);
             } else {
-                /** 数据包 http */
+                /** 数据包 http ,這只是一個數據打包的方法， */
                 $throughStream = new WMHttpChunkStream($request->connection);
             }
             /** 实例化flv播放资源 */
@@ -361,6 +361,8 @@ class HttpWMServer
             }
             /** 添加播放器 */
             MediaServer::addPlayer($playerStream);
+            //MediaServer::addPlayerStream($playerStream);
+            //RtmpDemo::startPlay($request->connection->getSocket());
         } else {
             /** 没有这一路推流资源 直接关闭链接或者发送404 */
             logger()->warning("Stream {path} not found", ['path' => $flvPath]);
@@ -379,4 +381,49 @@ class HttpWMServer
 
         }
     }
+
+
+    /** 開始播放 */
+    public function startPlay($client)
+    {
+
+        $flvHeader = "FLV\x01\x00" . pack('NN', 9, 0);
+        $flvHeader[4] = chr(ord($flvHeader[4]) | 4);
+        $flvHeader[4] = chr(ord($flvHeader[4]) | 1);
+
+        RtmpDemo::write($flvHeader,$client);
+    }
+    /**
+     * 发送数据
+     * @param $data
+     * @return null
+     * @comment 已验证过，此方法可以正确的传输flv数据，但是无法播放，那么问题就出在数据上，可能是数据转16进制，再转二进制出错了。
+     */
+    public static function write($data, $client)
+    {
+
+        /** 判断是否是发送第一个分块 */
+        if (!isset(self::$hasSendHeader[(int)$client])) {
+            /** 配置flv头 */
+            $content = "HTTP/1.1 200 OK\r\n";
+            $content .= "Cache-Control: no-cache\r\n";
+            $content .= "Content-Type: video/x-flv\r\n";
+            $content .= "Transfer-Encoding: chunked\r\n";
+            $content .= "Connection: keep-alive\r\n";
+            $content .= "Server: xiaosongshu\r\n";
+            $content .= "Access-Control-Allow-Origin: *\r\n";
+            $content .= "\r\n";
+            /** 向浏览器发送数据 */
+            fwrite($client, $content . \dechex(\strlen($data)) . "\r\n$data\r\n");
+            /** 标记已发送过头部了 */
+            self::$hasSendHeader[(int)$client] = 1;
+        } else {
+            /** 直接发送分块后的flv数据 */
+            fwrite($client, \dechex(\strlen($data)) . "\r\n$data\r\n");
+        }
+    }
+
+
+    /** 是否已经发送了第一个flv块*/
+    public static $hasSendHeader = [];
 }
