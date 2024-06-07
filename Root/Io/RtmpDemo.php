@@ -445,7 +445,7 @@ class RtmpDemo
 
             } else {
                 var_dump(time() . '...........');
-                var_dump("一共接收到关键帧：" . count(self::$importantFram));
+                var_dump("一共接收到关键帧：" . count(self::$importantFram).'-'.self::$keyFrameCount);
                 foreach (self::$playerClients as $client) {
                     if (is_resource($client)) {
                         self::frameSend($frame, $client);
@@ -674,6 +674,32 @@ class RtmpDemo
         return $result;
     }
 
+
+    public static function sendKeyFrame($fd,$array){
+//        $array = self::$gatewayImportantFrame;
+        foreach ($array as $buffer) {
+            if ($buffer['cmd'] == 'frame') {
+                /** 保持数据的原始性，尽量不添加其他数据 */
+                $type = $buffer['data']['type'];
+                $timestamp = $buffer['data']['timestamp'];
+                $data = $buffer['data']['frame'];
+                $important = $buffer['data']['important'];
+                $order = $buffer['data']['order'];
+                $count = $buffer['data']['keyCount'];
+                /** 使用http之类的文本分隔符 ，一整个报文之间用换行符分割 ，这个鸡儿协议真难搞 */
+                $string = $type . "\r\n" . $timestamp . "\r\n" . $important . "\r\n" . $count . "\r\n" . $data . "\r\n\r\n";
+
+                /** 他么的这数据也太长了，将数据切片发送 */
+                $stringArray = self::splitString($string, 1024);
+                if (is_resource($fd)) {
+                    foreach ($stringArray as $item) {
+                        fwrite($fd, $item);
+                    }
+                }
+            }
+        }
+
+    }
     /**
      * 网关监测客户端可写事件
      * @param $fd
@@ -684,29 +710,21 @@ class RtmpDemo
 
         /** 当代理客户端可读的时候，先发送关键帧 */
         if (!isset(self::$hasSendKeyFrame[(int)$fd])) {
-            foreach (self::$gatewayImportantFrame as $buffer) {
-                if ($buffer['cmd'] == 'frame') {
-                    /** 保持数据的原始性，尽量不添加其他数据 */
-                    $type = $buffer['data']['type'];
-                    $timestamp = $buffer['data']['timestamp'];
-                    $data = $buffer['data']['frame'];
-                    $important = $buffer['data']['important'];
-                    $order = $buffer['data']['order'];
-                    $count = $buffer['data']['keyCount'];
-                    /** 使用http之类的文本分隔符 ，一整个报文之间用换行符分割 ，这个鸡儿协议真难搞 */
-                    $string = $type . "\r\n" . $timestamp . "\r\n" . $important . "\r\n" . $count . "\r\n" . $data . "\r\n\r\n";
-
-                    /** 他么的这数据也太长了，将数据切片发送 */
-                    $stringArray = self::splitString($string, 1024);
-                    if (is_resource($fd)) {
-                        foreach ($stringArray as $item) {
-                            fwrite($fd, $item);
-                        }
-                    }
-                }
+            $array = self::$gatewayImportantFrame;
+            self::sendKeyFrame($fd,$array);
+            $haSendKey = count($array) ;
+            self::$hasSendKeyFrame[(int)$fd] = $haSendKey ;
+            var_dump("第一次发送关键帧:" . $haSendKey );
+        }else{
+            $nowCount = count(self::$gatewayImportantFrame);
+            $oldCount = self::$hasSendKeyFrame[(int)$fd];
+            $add = $nowCount - $oldCount;
+            if ($add){
+                $array = array_slice(self::$gatewayImportantFrame,$oldCount,$add);
+                self::sendKeyFrame($fd,$array);
+                self::$hasSendKeyFrame[(int)$fd] = $nowCount ;
+                var_dump("后面追加关键帧:" . $add );
             }
-            self::$hasSendKeyFrame[(int)$fd] = 1;
-            var_dump("第一次发送关键帧:" . count(self::$gatewayImportantFrame));
 
         }
         /** 然后发送普通帧 */
