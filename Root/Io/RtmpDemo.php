@@ -526,19 +526,21 @@ class RtmpDemo
     {
 
         if (!isset(self::$hasStartPlay[(int)$client])){
-            /** 首先发送开播命令 */
-            $flvHeader = "FLV\x01\x00" . pack('NN', 9, 0);
-            $flvHeader[4] = chr(ord($flvHeader[4]) | 4);
-            $flvHeader[4] = chr(ord($flvHeader[4]) | 1);
-            self::write($flvHeader,$client);
+
 
             /** 发送关键帧 */
             if (self::$importantFram&&count(self::$importantFram)==4){
+                /** 首先发送开播命令 */
+                $flvHeader = "FLV\x01\x00" . pack('NN', 9, 0);
+                $flvHeader[4] = chr(ord($flvHeader[4]) | 4);
+                $flvHeader[4] = chr(ord($flvHeader[4]) | 1);
+                self::write($flvHeader,$client);
                 foreach (self::$importantFram as $frame){
                     self::frameSend($frame,$client);
                 }
                 /** 发送完关键帧结束，才可以发送普通帧 */
                 self::$hasStartPlay[(int)$client] = 1;
+                var_dump("发送开播命令完成");
             }
         }
 
