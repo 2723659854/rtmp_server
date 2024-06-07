@@ -511,8 +511,10 @@ class RtmpDemo
     /** 是否已经发送了第一个flv块*/
     public static $hasSendHeader = [];
 
+    /** 使用网关播放的播放器是否发送了开始播放命令 */
     public static $hasStartPlay = [];
 
+    /** 开始播放命令 */
     public function startPlay($client)
     {
         if (!isset(self::$hasStartPlay[(int)$client])){
