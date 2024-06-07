@@ -441,8 +441,8 @@ class RtmpDemo
             /** 保存关键帧 */
             if ($important) {
                 self::$importantFram[] = $frame;
-                var_dump("一共接收到关键帧：" . count(self::$importantFram));
-                var_dump("关键帧总数：" . self::$keyFrameCount);
+                var_dump("一共接收到关键帧：" . count(self::$importantFram).'-'.self::$keyFrameCount);
+
             } else {
                 var_dump(time() . '...........');
                 var_dump("一共接收到关键帧：" . count(self::$importantFram));
@@ -804,7 +804,7 @@ class RtmpDemo
                                     foreach (self::$importantFram as $small) {
                                         self::frameSend($small, $clientSocket);
                                     }
-                                    var_dump("发送关键帧完成");
+                                    var_dump("发送关键帧完成".count(self::$importantFram));
                                 }
 
                             } catch (\Exception|\RuntimeException $exception) {

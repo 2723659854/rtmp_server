@@ -202,6 +202,8 @@ class MediaServer
 
         /** 将关键帧转发到网关 必须要先发送关键帧，播放器才可以正常播放 */
         if (self::$hasSendImportantFrame == false ){
+            /** 先清空 */
+            //RtmpDemo::$gatewayImportantFrame = [];
             /** 缓存所有的关键帧 */
             $array = [];
             $publishStream = $publisher;
@@ -280,6 +282,7 @@ class MediaServer
             /**
              * 发送关键帧
              * @comment 这个关键帧，存在丢包的情况
+             * //todo 这里存在问题，有时候不能够获取完整的关键帧，导致无法播放
              */
             foreach ($publishStream->getGopCacheQueue() as $frame) {
                 /** 将数据发送给连接了网关的客户端 ,发送原始数据*/
@@ -305,7 +308,9 @@ class MediaServer
                 RtmpDemo::$gatewayImportantFrame[] = $smallFrame;
             }
 
-            self::$hasSendImportantFrame = true;
+            if ($count>=400){
+                self::$hasSendImportantFrame = true;
+            }
             var_dump("关键帧存入完毕,一共{$count}帧");
         }
 
@@ -313,7 +318,6 @@ class MediaServer
         /** 将数据发送给连接了网关的客户端 ,发送原始数据 */
         RtmpDemo::$gatewayBuffer[] = [ 'cmd'=>'frame', 'socket'=>null, 'data'=>[ 'path'=>$publisher->getPublishPath(), 'frame'=>$frame->_buffer, 'timestamp'=>$frame->timestamp??0,  'type'=>$frame->FRAME_TYPE, 'important'=>0, 'keyCount'=>0]];
 
-        var_dump('11');
         /** 获取这个媒体路径下的所有播放设备 */
         foreach (self::getPlayStreams($publisher->getPublishPath()) as $playStream) {
             /** 如果播放器不是空闲状态 */
