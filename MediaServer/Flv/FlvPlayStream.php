@@ -196,6 +196,10 @@ class FlvPlayStream extends EventEmitter implements PlayStreamInterface
     }
 
 
+    /**
+     * 此方法可用，說明不是數據的問題
+     * @return void
+     */
     public function startPlay()
     {
 
@@ -237,18 +241,18 @@ class FlvPlayStream extends EventEmitter implements PlayStreamInterface
 
         //gop 发送
         /**
-         * 发送关键帧
+         * 发送关键帧 經過測試，這個是必須要發送的，否則無法播放
          */
         if ($this->isEnableGop()) {
-            foreach ($publishStream->getGopCacheQueue() as &$frame) {
+            foreach ($publishStream->getGopCacheQueue() as $frame) {
                 //$this->frameSend($frame);
                 RtmpDemo::frameSend($frame,$client);
             }
         }
         /** 更新播放器状态为非空闲 */
-        $this->isPlayerIdling = false;
+        //$this->isPlayerIdling = false;
         /** 更新为正在播放 */
-        $this->isPlaying = true;
+        //$this->isPlaying = true;
 
     }
     /**
@@ -262,7 +266,6 @@ class FlvPlayStream extends EventEmitter implements PlayStreamInterface
         $path = $this->getPlayPath();
         /** 获取推流的资源 */
         $publishStream = MediaServer::getPublishStream($path);
-        var_dump("获取的播放推流",get_class($publishStream));
         logger()->info('flv play stream start play');
         /** 还没有发送flv协议头 */
         if (!$this->isFlvHeader) {
