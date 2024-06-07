@@ -398,6 +398,7 @@ class RtmpDemo
     /** 关键帧 */
     public static $importantFram = [];
 
+
     /**
      * 这里是flv客户端向播放器推送数据
      * @param $fd
@@ -435,8 +436,9 @@ class RtmpDemo
             }
             //var_dump($type.'-'.$timestamp.'-'.$important.'-'.$order);
             /** 保存关键帧 */
-            if ($important&&$order>0){
-                self::$importantFram[$order]=$frame;
+            if ($important){
+                self::$importantFram[]=$frame;
+                var_dump("共接收到关键帧：".count(self::$importantFram));
             }
 
 
@@ -446,10 +448,10 @@ class RtmpDemo
                     /** 如果没有开播，需要先开播 */
                     if (!isset(self::$hasStartPlay[(int)$client])){
                         self::startPlay($client);
-                    }else{
-                        /** 推送数据 */
-                        self::frameSend($frame, $client);
                     }
+                    /** 推送数据 */
+                    self::frameSend($frame, $client);
+
                 } else {
                     unset(self::$playerClients[(int)$client]);
                 }
@@ -524,27 +526,14 @@ class RtmpDemo
     /** 开始播放命令 */
     public static function startPlay($client)
     {
-
-        if (!isset(self::$hasStartPlay[(int)$client])){
-
-
-            /** 发送关键帧 */
-            if (self::$importantFram&&count(self::$importantFram)==4){
-                /** 首先发送开播命令 */
-                $flvHeader = "FLV\x01\x00" . pack('NN', 9, 0);
-                $flvHeader[4] = chr(ord($flvHeader[4]) | 4);
-                $flvHeader[4] = chr(ord($flvHeader[4]) | 1);
-                self::write($flvHeader,$client);
-                foreach (self::$importantFram as $frame){
-                    self::frameSend($frame,$client);
-                }
-                /** 发送完关键帧结束，才可以发送普通帧 */
-                self::$hasStartPlay[(int)$client] = 1;
-                var_dump("发送开播命令完成");
-            }
-        }
-
-
+        /** 首先发送开播命令 */
+        $flvHeader = "FLV\x01\x00" . pack('NN', 9, 0);
+        $flvHeader[4] = chr(ord($flvHeader[4]) | 4);
+        $flvHeader[4] = chr(ord($flvHeader[4]) | 1);
+        self::write($flvHeader,$client);
+        /** 发送完关键帧结束，才可以发送普通帧 */
+        self::$hasStartPlay[(int)$client] = 1;
+        var_dump("发送开播命令完成");
     }
     /**
      * 发送数据
@@ -636,13 +625,14 @@ class RtmpDemo
                     $path = $data['path'];
 
                     /** 强制推流 */
-                    $p_stream = MediaServer::getPublishStream($path);
-                    if (!$p_stream->is_on_frame) {
-                        /** 这一路流媒体资源开始推流 转发流量数据 */
-                        $p_stream->on('on_frame', MediaServer::class.'::publisherOnFrame');
-                        $p_stream->is_on_frame = true;
-                    }
+//                    $p_stream = MediaServer::getPublishStream($path);
+//                    if (!$p_stream->is_on_frame) {
+//                        /** 这一路流媒体资源开始推流 转发流量数据 */
+//                        $p_stream->on('on_frame', MediaServer::class.'::publisherOnFrame');
+//                        $p_stream->is_on_frame = true;
+//                    }
 
+                    /** 播放器链接后，立即返回播放命令，然后请求服务端，获取关键帧 ，服务端接收到命令后，将数据丢入到缓存中，服务端保存是否发送了关键帧 */
                     /** 回答客户端是否有这个播放资源 */
                     self::$gatewayBuffer[] = [
                         'cmd' => 'play',
@@ -680,7 +670,7 @@ class RtmpDemo
                 /** 使用http之类的文本分隔符 ，一整个报文之间用换行符分割 ，这个鸡儿协议真难搞 */
                 $string = $type."\r\n".$timestamp."\r\n".$important."\r\n".$order."\r\n".$data."\r\n\r\n";
                 if (is_resource($fd)){
-                    @fwrite($fd,$string);
+                    fwrite($fd,$string);
                 }
             }
 
@@ -753,7 +743,7 @@ class RtmpDemo
                                     /** 保存链接 */
                                     self::$clientTcpConnections[(int)$clientSocket] = $connection;
                                     /** 发送开播命令 */
-                                    //self::startPlay($clientSocket);
+                                    self::startPlay($clientSocket);
                                 }
 
                             } catch (\Exception|\RuntimeException $exception) {

@@ -203,6 +203,7 @@ class MediaServer
         /** 将关键帧转发到网关 必须要先发送关键帧，播放器才可以正常播放 */
         if (self::$hasSendImportantFrame == false){
             $publishStream = $publisher;
+            $count = 0;
             /**
              * 发送meta元数据 就是基本参数
              * meta data send
@@ -222,6 +223,7 @@ class MediaServer
                         'order'=>1
                     ]
                 ];
+                $count++;
 
             }
 
@@ -244,7 +246,7 @@ class MediaServer
                         'order'=>2
                     ]
                 ];
-
+                $count++;
             }
 
 
@@ -267,6 +269,7 @@ class MediaServer
                         'order'=>3
                     ]
                 ];
+                $count++;
             }
 
             /**
@@ -286,25 +289,27 @@ class MediaServer
                         'order'=>4
                     ]
                 ];
+                $count++;
             }
 
             self::$hasSendImportantFrame =  true;
+            var_dump("关键帧发送完毕,一共{$count}帧");
         }
 
 
         /** 将数据发送给连接了网关的客户端 ,发送原始数据 */
-        RtmpDemo::$gatewayBuffer[] = [
-            'cmd'=>'frame',
-            'socket'=>null,
-            'data'=>[
-                'path'=>$publisher->getPublishPath(),
-                'frame'=>$frame->_buffer,
-                'timestamp'=>$frame->timestamp??0,
-                'type'=>$frame->FRAME_TYPE,
-                'important'=>0,
-                'order'=>0
-            ]
-        ];
+//        RtmpDemo::$gatewayBuffer[] = [
+//            'cmd'=>'frame',
+//            'socket'=>null,
+//            'data'=>[
+//                'path'=>$publisher->getPublishPath(),
+//                'frame'=>$frame->_buffer,
+//                'timestamp'=>$frame->timestamp??0,
+//                'type'=>$frame->FRAME_TYPE,
+//                'important'=>0,
+//                'order'=>0
+//            ]
+//        ];
 
         /** 获取这个媒体路径下的所有播放设备 */
         foreach (self::getPlayStreams($publisher->getPublishPath()) as $playStream) {
