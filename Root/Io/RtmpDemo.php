@@ -421,19 +421,21 @@ class RtmpDemo
             $type = intval($array[0]);
 
             $timestamp = intval($array[1]);
-            var_dump($array[0]."-".$array[1].'-'.$type.'-'.$timestamp);
+            //var_dump($array[0]."-".$array[1].'-'.$type.'-'.$timestamp);
             $frame = $array[2];
-            /** 这里有问题 ，接收流媒体数据的时候有问题 */
+            /** 目前播放器可以拉流，缓冲数据，无法播放，不知道是什么原因 */
             if ($type == MediaFrame::VIDEO_FRAME) {
-
                 $frame = new VideoFrame($frame, $timestamp);
             }
-            if ($type == MediaFrame::AUDIO_FRAME) {
+            elseif ($type == MediaFrame::AUDIO_FRAME) {
                 $frame = new AudioFrame($frame, $timestamp);
             }
-            if ($type == MediaFrame::META_FRAME) {
+            else{
                 $frame = new MetaDataFrame($frame);
             }
+//            if ($type == MediaFrame::META_FRAME) {
+//                $frame = new MetaDataFrame($frame);
+//            }
             foreach (self::$playerClients as $client) {
                 if (is_resource($client)) {
                     //var_dump("要给客户端发送数据呢");
@@ -646,8 +648,8 @@ class RtmpDemo
         if (!empty($buffer)) {
             if ($buffer['cmd'] == 'frame') {
 
-                var_dump($buffer['data']['type']);
-                var_dump($buffer['data']['timestamp']);
+                //var_dump($buffer['data']['type']);
+                //var_dump($buffer['data']['timestamp']);
 
                 $type = str_pad($buffer['data']['type'], 3, "0", STR_PAD_LEFT);
                 $timestamp = str_pad($buffer['data']['timestamp'], 12, "0", STR_PAD_LEFT);

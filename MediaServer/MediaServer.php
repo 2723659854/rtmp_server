@@ -188,7 +188,9 @@ class MediaServer
 
     }
 
+    /** 播放之前需要先依次 发送 meta元数据 就是基本参数 发送视频avc数据 发送音频aac数据 发送关键帧*/
 
+    public static bool $hasSendImportantFrame = false;
     /**
      * 转发流媒体数据
      * @param $publisher PublishStreamInterface 发布者 可以是音频，可以是视频
@@ -198,7 +200,99 @@ class MediaServer
     static function publisherOnFrame(MediaFrame $frame, PublishStreamInterface $publisher)
     {
 
-        /** 将数据发送给连接了网关的客户端 ,发送原始数据*/
+        /** 将关键帧转发到网关 */
+        if (self::$hasSendImportantFrame == false){
+            $publishStream = self::getPublishStream($publisher->getPublishPath());
+
+            /**
+             * 发送meta元数据 就是基本参数
+             * meta data send
+             */
+            if ($publishStream->isMetaData()) {
+                $frame = $publishStream->getMetaDataFrame();
+                /** 将数据发送给连接了网关的客户端 ,发送原始数据*/
+                RtmpDemo::$gatewayBuffer[] = [
+                    'cmd'=>'frame',
+                    'socket'=>null,
+                    'data'=>[
+                        'path'=>$publisher->getPublishPath(),
+                        /** 这样子处理数据，解析出来不对 */
+                        //'frame'=>bin2hex($frame->_data),
+                        'frame'=>$frame->_buffer,
+                        'timestamp'=>$frame->timestamp??0,
+                        'type'=>$frame->FRAME_TYPE
+                    ]
+                ];
+
+            }
+
+            /**
+             * 发送视频avc数据
+             * avc sequence send
+             */
+            if ($publishStream->isAVCSequence()) {
+                $frame = $publishStream->getAVCSequenceFrame();
+                /** 将数据发送给连接了网关的客户端 ,发送原始数据*/
+                RtmpDemo::$gatewayBuffer[] = [
+                    'cmd'=>'frame',
+                    'socket'=>null,
+                    'data'=>[
+                        'path'=>$publisher->getPublishPath(),
+                        /** 这样子处理数据，解析出来不对 */
+                        //'frame'=>bin2hex($frame->_data),
+                        'frame'=>$frame->_buffer,
+                        'timestamp'=>$frame->timestamp??0,
+                        'type'=>$frame->FRAME_TYPE
+                    ]
+                ];
+
+            }
+
+
+            /**
+             * 发送音频aac数据
+             * aac sequence send
+             */
+            if ($publishStream->isAACSequence()) {
+                $frame = $publishStream->getAACSequenceFrame();
+                /** 将数据发送给连接了网关的客户端 ,发送原始数据*/
+                RtmpDemo::$gatewayBuffer[] = [
+                    'cmd'=>'frame',
+                    'socket'=>null,
+                    'data'=>[
+                        'path'=>$publisher->getPublishPath(),
+                        /** 这样子处理数据，解析出来不对 */
+                        //'frame'=>bin2hex($frame->_data),
+                        'frame'=>$frame->_buffer,
+                        'timestamp'=>$frame->timestamp??0,
+                        'type'=>$frame->FRAME_TYPE
+                    ]
+                ];
+            }
+
+            //gop 发送
+            /**
+             * 发送关键帧
+             */
+            foreach ($publishStream->getGopCacheQueue() as $frame) {
+                /** 将数据发送给连接了网关的客户端 ,发送原始数据*/
+                RtmpDemo::$gatewayBuffer[] = [
+                    'cmd'=>'frame',
+                    'socket'=>null,
+                    'data'=>[
+                        'path'=>$publisher->getPublishPath(),
+                        /** 这样子处理数据，解析出来不对 */
+                        //'frame'=>bin2hex($frame->_data),
+                        'frame'=>$frame->_buffer,
+                        'timestamp'=>$frame->timestamp??0,
+                        'type'=>$frame->FRAME_TYPE
+                    ]
+                ];
+            }
+
+            self::$hasSendImportantFrame =  true;
+        }
+        /** 将数据发送给连接了网关的客户端 ,发送原始数据 */
         RtmpDemo::$gatewayBuffer[] = [
             'cmd'=>'frame',
             'socket'=>null,
