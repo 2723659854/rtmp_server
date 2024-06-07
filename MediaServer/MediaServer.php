@@ -201,7 +201,9 @@ class MediaServer
     {
 
         /** 将关键帧转发到网关 必须要先发送关键帧，播放器才可以正常播放 */
-        if (self::$hasSendImportantFrame == false){
+        if (self::$hasSendImportantFrame == false ){
+            /** 缓存所有的关键帧 */
+            $array = [];
             $publishStream = $publisher;
             $count = 0;
             /**
@@ -211,7 +213,7 @@ class MediaServer
             if ($publishStream->isMetaData()) {
                 $frame = $publishStream->getMetaDataFrame();
                 /** 将数据发送给连接了网关的客户端 ,发送原始数据*/
-                RtmpDemo::$gatewayBuffer[] = [
+                $array[] = [
                     'cmd'=>'frame',
                     'socket'=>null,
                     'data'=>[
@@ -220,7 +222,8 @@ class MediaServer
                         'timestamp'=>$frame->timestamp??0,
                         'type'=>$frame->FRAME_TYPE,
                         'important'=>1,
-                        'order'=>1
+                        'order'=>1,
+                        'keyCount'=>0
                     ]
                 ];
                 $count++;
@@ -234,7 +237,7 @@ class MediaServer
             if ($publishStream->isAVCSequence()) {
                 $frame = $publishStream->getAVCSequenceFrame();
                 /** 将数据发送给连接了网关的客户端 ,发送原始数据*/
-                RtmpDemo::$gatewayBuffer[] = [
+                $array[] = [
                     'cmd'=>'frame',
                     'socket'=>null,
                     'data'=>[
@@ -243,7 +246,8 @@ class MediaServer
                         'timestamp'=>$frame->timestamp??0,
                         'type'=>$frame->FRAME_TYPE,
                         'important'=>1,
-                        'order'=>2
+                        'order'=>2,
+                        'keyCount'=>0
                     ]
                 ];
                 $count++;
@@ -257,7 +261,7 @@ class MediaServer
             if ($publishStream->isAACSequence()) {
                 $frame = $publishStream->getAACSequenceFrame();
                 /** 将数据发送给连接了网关的客户端 ,发送原始数据*/
-                RtmpDemo::$gatewayBuffer[] = [
+                $array[] = [
                     'cmd'=>'frame',
                     'socket'=>null,
                     'data'=>[
@@ -266,7 +270,8 @@ class MediaServer
                         'timestamp'=>$frame->timestamp??0,
                         'type'=>$frame->FRAME_TYPE,
                         'important'=>1,
-                        'order'=>3
+                        'order'=>3,
+                        'keyCount'=>0
                     ]
                 ];
                 $count++;
@@ -274,10 +279,11 @@ class MediaServer
 
             /**
              * 发送关键帧
+             * @comment 这个关键帧，存在丢包的情况
              */
             foreach ($publishStream->getGopCacheQueue() as $frame) {
                 /** 将数据发送给连接了网关的客户端 ,发送原始数据*/
-                RtmpDemo::$gatewayBuffer[] = [
+                $array[] = [
                     'cmd'=>'frame',
                     'socket'=>null,
                     'data'=>[
@@ -286,31 +292,28 @@ class MediaServer
                         'timestamp'=>$frame->timestamp??0,
                         'type'=>$frame->FRAME_TYPE,
                         'important'=>1,
-                        'order'=>4
+                        'order'=>4,
+                        'keyCount'=>0
                     ]
                 ];
+                /** 统计包的总数 */
                 $count++;
             }
+            /** 将关键帧的数量写入 */
+            foreach ($array as $smallFrame){
+                $smallFrame['data']['keyCount'] = $count;
+                RtmpDemo::$gatewayImportantFrame[] = $smallFrame;
+            }
 
-            self::$hasSendImportantFrame =  true;
-            var_dump("关键帧发送完毕,一共{$count}帧");
+            self::$hasSendImportantFrame = true;
+            var_dump("关键帧存入完毕,一共{$count}帧");
         }
 
 
         /** 将数据发送给连接了网关的客户端 ,发送原始数据 */
-//        RtmpDemo::$gatewayBuffer[] = [
-//            'cmd'=>'frame',
-//            'socket'=>null,
-//            'data'=>[
-//                'path'=>$publisher->getPublishPath(),
-//                'frame'=>$frame->_buffer,
-//                'timestamp'=>$frame->timestamp??0,
-//                'type'=>$frame->FRAME_TYPE,
-//                'important'=>0,
-//                'order'=>0
-//            ]
-//        ];
+        RtmpDemo::$gatewayBuffer[] = [ 'cmd'=>'frame', 'socket'=>null, 'data'=>[ 'path'=>$publisher->getPublishPath(), 'frame'=>$frame->_buffer, 'timestamp'=>$frame->timestamp??0,  'type'=>$frame->FRAME_TYPE, 'important'=>0, 'keyCount'=>0]];
 
+        var_dump('11');
         /** 获取这个媒体路径下的所有播放设备 */
         foreach (self::getPlayStreams($publisher->getPublishPath()) as $playStream) {
             /** 如果播放器不是空闲状态 */
