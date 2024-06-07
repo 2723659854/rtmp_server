@@ -439,10 +439,17 @@ class RtmpDemo
                 self::$importantFram[$order]=$frame;
             }
 
+
             /** 发送普通数据 */
             foreach (self::$playerClients as $client) {
                 if (is_resource($client)) {
-                    self::frameSend($frame, $client);
+                    /** 如果没有开播，需要先开播 */
+                    if (!isset(self::$hasStartPlay[(int)$client])){
+                        self::startPlay($client);
+                    }else{
+                        /** 推送数据 */
+                        self::frameSend($frame, $client);
+                    }
                 } else {
                     unset(self::$playerClients[(int)$client]);
                 }
@@ -524,7 +531,15 @@ class RtmpDemo
             $flvHeader[4] = chr(ord($flvHeader[4]) | 4);
             $flvHeader[4] = chr(ord($flvHeader[4]) | 1);
             self::write($flvHeader,$client);
-            self::$hasStartPlay[(int)$client] = 1;
+
+            /** 发送关键帧 */
+            if (self::$importantFram){
+                foreach (self::$importantFram as $frame){
+                    self::frameSend($frame,$client);
+                }
+                /** 发送完关键帧结束，才可以发送普通帧 */
+                self::$hasStartPlay[(int)$client] = 1;
+            }
         }
 
 
