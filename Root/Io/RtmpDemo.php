@@ -447,9 +447,11 @@ class RtmpDemo
                 }
             }
 
+
             /** 发送普通数据 */
             foreach (self::$playerClients as $client) {
                 if (is_resource($client)) {
+                    self::startPlay($client);
                     //var_dump("要给客户端发送数据呢");
                     //todo 发送数据给客户端
                     foreach ($needSend as $small){
@@ -751,7 +753,7 @@ class RtmpDemo
                                     /** 保存链接 */
                                     self::$clientTcpConnections[(int)$clientSocket] = $connection;
                                     /** 发送开播命令 */
-                                    self::startPlay($clientSocket);
+                                    //self::startPlay($clientSocket);
                                 }
 
                             } catch (\Exception|\RuntimeException $exception) {
