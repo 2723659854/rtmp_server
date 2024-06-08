@@ -5,11 +5,14 @@ namespace Root\Io;
 use MediaServer\Flv\Flv;
 use MediaServer\Flv\FlvTag;
 use MediaServer\Http\HttpWMServer;
+use MediaServer\MediaReader\AACPacket;
 use MediaServer\MediaReader\AudioFrame;
+use MediaServer\MediaReader\AVCPacket;
 use MediaServer\MediaReader\MediaFrame;
 use MediaServer\MediaReader\MetaDataFrame;
 use MediaServer\MediaReader\VideoFrame;
 use MediaServer\MediaServer;
+use MediaServer\PushServer\PublishStreamInterface;
 use Root\Protocols\Http;
 use Root\Protocols\Http\Chunk;
 use Root\Response;
@@ -394,10 +397,13 @@ class RtmpDemo
     public static $readBuffer = "";
 
     /** 关键帧 */
-    public static $importantFram = [];
+    public static $importantFrame = [];
 
     /** 关键帧总数 */
     public static $keyFrameCount = 0;
+
+    /** 后面客户端播放后追加的关键帧 */
+    public static $addKeyFrameAfterPlay = [];
 
     /**
      * 这里是flv客户端向播放器推送数据
@@ -437,23 +443,63 @@ class RtmpDemo
             if ($count != 0) {
                 self::$keyFrameCount = $count;
             }
-            //var_dump($type.'-'.$timestamp.'-'.$important.'-'.$order);
-            /** 保存关键帧 */
-            if ($important) {
-                self::$importantFram[] = $frame;
-                var_dump("一共接收到关键帧：" . count(self::$importantFram).'-'.self::$keyFrameCount);
+            /** 强制保存所有关键帧 ，这个会导致内存溢出，但是可以保证经过网关转发后可以播放。那么建议新增一个接口，更新关键帧 ，而不是追加 */
+            self::$importantFrame[] = $frame;
 
-            } else {
-                var_dump(time() . '...........');
-                var_dump("一共接收到关键帧：" . count(self::$importantFram).'-'.self::$keyFrameCount);
-                foreach (self::$playerClients as $client) {
-                    if (is_resource($client)) {
-                        self::frameSend($frame, $client);
-                    }
+            /** 给所有客户端发送关键帧 */
+            foreach (self::$playerClients as $client) {
+                if (is_resource($client)) {
+                    self::frameSend($frame, $client);
                 }
             }
+        }
+    }
 
+    public static function addKeyFram(MediaFrame $frame)
+    {
+        /** 将音频帧的关键帧加入到队列 */
+        if ($frame->FRAME_TYPE == MediaFrame::AUDIO_FRAME) {
+            $aacPack = $frame->getAACPacket();
+            $isAACSequence = false;
+            if ($aacPack->aacPacketType === AACPacket::AAC_PACKET_TYPE_SEQUENCE_HEADER) {
+                $isAACSequence = true;
+            }
 
+            if ($isAACSequence) {
+
+                if ($aacPack->aacPacketType == AACPacket::AAC_PACKET_TYPE_SEQUENCE_HEADER) {
+
+                } else {
+                    var_dump("收到音频关键帧");
+                    //音频关键帧缓存
+                    /** 保存音频关键帧 */
+                    self::$importantFrame[] = $frame;
+                }
+            }
+        }
+
+        if ($frame->FRAME_TYPE == MediaFrame::VIDEO_FRAME) {
+            $avcPack = $frame->getAVCPacket();
+            $isAVCSequence = false;
+            //read avc
+            /** 元数据 描述信息 */
+            if ($avcPack->avcPacketType === AVCPacket::AVC_PACKET_TYPE_SEQUENCE_HEADER) {
+                $isAVCSequence = true;
+            }
+
+            if ($isAVCSequence) {
+
+                /** 保存视频帧 */
+                if ($frame->frameType === VideoFrame::VIDEO_FRAME_TYPE_KEY_FRAME
+                    &&
+                    $avcPack->avcPacketType === AVCPacket::AVC_PACKET_TYPE_SEQUENCE_HEADER) {
+                    //skip avc sequence
+                } else {
+                    /** 保存视频关键帧 */
+                    self::$importantFrame[] = $frame;
+                    var_dump("收到视频关键帧");
+                }
+            }
         }
     }
 
@@ -564,8 +610,8 @@ class RtmpDemo
         }
 
         /** 数据切片后发送 */
-        $stringArray = self::splitString($string,1024);
-        foreach ($stringArray as $item){
+        $stringArray = self::splitString($string, 1024);
+        foreach ($stringArray as $item) {
             fwrite($client, $item);
         }
 
@@ -675,7 +721,13 @@ class RtmpDemo
     }
 
 
-    public static function sendKeyFrame($fd,$array){
+    /**
+     * 发送关键帧
+     * @param $fd
+     * @param $array
+     */
+    public static function sendKeyFrame($fd, $array)
+    {
 //        $array = self::$gatewayImportantFrame;
         foreach ($array as $buffer) {
             if ($buffer['cmd'] == 'frame') {
@@ -700,6 +752,7 @@ class RtmpDemo
         }
 
     }
+
     /**
      * 网关监测客户端可写事件
      * @param $fd
@@ -711,19 +764,19 @@ class RtmpDemo
         /** 当代理客户端可读的时候，先发送关键帧 */
         if (!isset(self::$hasSendKeyFrame[(int)$fd])) {
             $array = self::$gatewayImportantFrame;
-            self::sendKeyFrame($fd,$array);
-            $haSendKey = count($array) ;
-            self::$hasSendKeyFrame[(int)$fd] = $haSendKey ;
-            var_dump("第一次发送关键帧:" . $haSendKey );
-        }else{
+            self::sendKeyFrame($fd, $array);
+            $haSendKey = count($array);
+            self::$hasSendKeyFrame[(int)$fd] = $haSendKey;
+            var_dump("第一次发送关键帧:" . $haSendKey);
+        } else {
             $nowCount = count(self::$gatewayImportantFrame);
             $oldCount = self::$hasSendKeyFrame[(int)$fd];
             $add = $nowCount - $oldCount;
-            if ($add){
-                $array = array_slice(self::$gatewayImportantFrame,$oldCount,$add);
-                self::sendKeyFrame($fd,$array);
-                self::$hasSendKeyFrame[(int)$fd] = $nowCount ;
-                var_dump("后面追加关键帧:" . $add );
+            if ($add) {
+                $array = array_slice(self::$gatewayImportantFrame, $oldCount, $add);
+                self::sendKeyFrame($fd, $array);
+                self::$hasSendKeyFrame[(int)$fd] = $nowCount;
+                var_dump("后面追加关键帧:" . $add);
             }
 
         }
@@ -819,10 +872,14 @@ class RtmpDemo
                                     /** 发送开播命令 */
                                     self::startPlay($clientSocket);
                                     /** 发送关键帧 */
-                                    foreach (self::$importantFram as $small) {
+                                    foreach (self::$importantFrame as $small) {
                                         self::frameSend($small, $clientSocket);
                                     }
-                                    var_dump("发送关键帧完成".count(self::$importantFram));
+                                    /** 补后面的关键帧 */
+                                    foreach (self::$addKeyFrameAfterPlay as $small){
+                                        self::frameSend($small, $clientSocket);
+                                    }
+                                    var_dump("发送关键帧完成" . count(self::$importantFrame));
                                 }
 
                             } catch (\Exception|\RuntimeException $exception) {

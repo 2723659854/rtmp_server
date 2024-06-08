@@ -312,7 +312,7 @@ class MediaServer
                 $smallFrame['data']['keyCount'] = self::$count;
                 RtmpDemo::$gatewayImportantFrame[] = $smallFrame;
             }
-
+            /** 确保收集到足够的关键帧，否则经过网关转发后，因为缺少关键帧而无法播放 ，但是也不可以过大，如果过大，会导致内存溢出，经过测试400帧是比较理想的，请不要轻易改动 */
             if (self::$count>=400){
                 self::$hasSendImportantFrame = true;
             }
@@ -323,7 +323,7 @@ class MediaServer
         /** 将数据发送给连接了网关的客户端 ,发送原始数据 */
         RtmpDemo::$gatewayBuffer[] = [ 'cmd'=>'frame', 'socket'=>null, 'data'=>[ 'path'=>$publisher->getPublishPath(), 'frame'=>$frame->_buffer, 'timestamp'=>$frame->timestamp??0,  'type'=>$frame->FRAME_TYPE, 'important'=>0, 'keyCount'=>0]];
 
-        var_dump('-----');
+
         /** 获取这个媒体路径下的所有播放设备 */
         foreach (self::getPlayStreams($publisher->getPublishPath()) as $playStream) {
             /** 如果播放器不是空闲状态 */
@@ -334,73 +334,6 @@ class MediaServer
         }
     }
 
-
-    public static function addKeyFram(MediaFrame $frame,PublishStreamInterface $publisher){
-        /** 将音频帧的关键帧加入到队列 */
-        if ($frame->FRAME_TYPE == MediaFrame::AUDIO_FRAME){
-            $aacPack = $frame->getAACPacket();
-            $isAACSequence = false;
-            if ($aacPack->aacPacketType === AACPacket::AAC_PACKET_TYPE_SEQUENCE_HEADER) {
-                $isAACSequence = true;
-            }
-
-            if ($isAACSequence) {
-
-                if ($aacPack->aacPacketType == AACPacket::AAC_PACKET_TYPE_SEQUENCE_HEADER) {
-
-                } else {
-                    //音频关键帧缓存
-                    RtmpDemo::$gatewayImportantFrame[] = [
-                        'cmd'=>'frame',
-                        'socket'=>null,
-                        'data'=>[
-                            'path'=>$publisher->getPublishPath(),
-                            'frame'=>$frame->_buffer,
-                            'timestamp'=>$frame->timestamp??0,
-                            'type'=>$frame->FRAME_TYPE,
-                            'important'=>1,
-                            'order'=>4,
-                            'keyCount'=>self::$count++
-                        ]
-                    ];
-                }
-            }
-        }
-
-        if ($frame->FRAME_TYPE == MediaFrame::VIDEO_FRAME){
-            $avcPack = $frame->getAVCPacket();
-            $isAVCSequence = false;
-            //read avc
-            /** 元数据 描述信息 */
-            if ($avcPack->avcPacketType === AVCPacket::AVC_PACKET_TYPE_SEQUENCE_HEADER) {
-                $isAVCSequence = true;
-            }
-
-            if ($isAVCSequence) {
-
-                /** 保存视频帧 */
-                if ($frame->frameType === VideoFrame::VIDEO_FRAME_TYPE_KEY_FRAME
-                    &&
-                    $avcPack->avcPacketType === AVCPacket::AVC_PACKET_TYPE_SEQUENCE_HEADER) {
-                    //skip avc sequence
-                } else {
-                    RtmpDemo::$gatewayImportantFrame[] = [
-                        'cmd'=>'frame',
-                        'socket'=>null,
-                        'data'=>[
-                            'path'=>$publisher->getPublishPath(),
-                            'frame'=>$frame->_buffer,
-                            'timestamp'=>$frame->timestamp??0,
-                            'type'=>$frame->FRAME_TYPE,
-                            'important'=>1,
-                            'order'=>4,
-                            'keyCount'=>self::$count++
-                        ]
-                    ];
-                }
-            }
-        }
-    }
 
     /**
      * 添加推流
