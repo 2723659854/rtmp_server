@@ -204,11 +204,36 @@ class MediaServer
      */
     static function publisherOnFrame(MediaFrame $frame, PublishStreamInterface $publisher)
     {
-
-        /** 将关键帧转发到网关 必须要先发送关键帧，播放器才可以正常播放 */
+        /** 收集关键帧 */
         if (self::$hasSendImportantFrame == false ){
+            self::addKeyFrame($frame,$publisher);
+        }
+
+        /** 将数据发送给连接了网关的客户端 ,发送原始数据 */
+        RtmpDemo::$gatewayBuffer[] = [ 'cmd'=>'frame', 'socket'=>null, 'data'=>[ 'path'=>$publisher->getPublishPath(), 'frame'=>$frame->_buffer, 'timestamp'=>$frame->timestamp??0,  'type'=>$frame->FRAME_TYPE, 'important'=>0, 'keyCount'=>0]];
+
+
+        /** 获取这个媒体路径下的所有播放设备 */
+        foreach (self::getPlayStreams($publisher->getPublishPath()) as $playStream) {
+            /** 如果播放器不是空闲状态 */
+            if (!$playStream->isPlayerIdling()) {
+                /** 转发数据包给播放器 */
+                $playStream->frameSend($frame);
+            }
+        }
+    }
+
+    /**
+     * 添加关键帧
+     * @param MediaFrame $frame
+     * @param PublishStreamInterface $publisher
+     */
+    public static function addKeyFrame(MediaFrame $frame, PublishStreamInterface $publisher){
+        /** 将关键帧转发到网关 必须要先发送关键帧，播放器才可以正常播放 */
+
             /** 先清空 */
-            //RtmpDemo::$gatewayImportantFrame = [];
+            RtmpDemo::$gatewayImportantFrame = [];
+            self::$count = 0;
             /** 缓存所有的关键帧 */
             $array = [];
             $publishStream = $publisher;
@@ -316,22 +341,8 @@ class MediaServer
             if (self::$count>=400){
                 self::$hasSendImportantFrame = true;
             }
-            var_dump("关键帧存入完毕,一共.".self::$count."帧");
-        }
+            var_dump("关键帧存入完毕,一共=".self::$count."帧");
 
-
-        /** 将数据发送给连接了网关的客户端 ,发送原始数据 */
-        RtmpDemo::$gatewayBuffer[] = [ 'cmd'=>'frame', 'socket'=>null, 'data'=>[ 'path'=>$publisher->getPublishPath(), 'frame'=>$frame->_buffer, 'timestamp'=>$frame->timestamp??0,  'type'=>$frame->FRAME_TYPE, 'important'=>0, 'keyCount'=>0]];
-
-
-        /** 获取这个媒体路径下的所有播放设备 */
-        foreach (self::getPlayStreams($publisher->getPublishPath()) as $playStream) {
-            /** 如果播放器不是空闲状态 */
-            if (!$playStream->isPlayerIdling()) {
-                /** 转发数据包给播放器 */
-                $playStream->frameSend($frame);
-            }
-        }
     }
 
 

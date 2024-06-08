@@ -455,6 +455,9 @@ class RtmpDemo
         }
     }
 
+    //todo  网关客户端加入后，立即推流
+
+
     public static function addKeyFram(MediaFrame $frame)
     {
         /** 将音频帧的关键帧加入到队列 */
