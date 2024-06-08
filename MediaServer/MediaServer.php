@@ -40,7 +40,7 @@ class MediaServer
         if (!self::$eventEmitter) {
             self::$eventEmitter = new EventEmitter();
         }
-        return call_user_func_array([self::$eventEmitter,$name],$arguments);
+        return call_user_func_array([self::$eventEmitter, $name], $arguments);
     }
 
 
@@ -57,8 +57,9 @@ class MediaServer
      * @param $args
      * @return array|false
      */
-    static public function callApi($name,$args = []){
-        switch ($name){
+    static public function callApi($name, $args = [])
+    {
+        switch ($name) {
             case 'listPushStream':
                 return self::listPushStream(...$args);
             default:
@@ -71,15 +72,16 @@ class MediaServer
      * @param $path
      * @return array
      */
-    static public function  listPushStream($path = null){
-        if($path){
-            return isset(self::$publishStream[$path])?[
+    static public function listPushStream($path = null)
+    {
+        if ($path) {
+            return isset(self::$publishStream[$path]) ? [
                 self::$publishStream[$path]->getPublishStreamInfo()
-            ]:[];
+            ] : [];
         }
-        return array_map(function($stream){
+        return array_map(function ($stream) {
             return $stream->getPublishStreamInfo();
-        },array_values(self::$publishStream));
+        }, array_values(self::$publishStream));
     }
 
     /**
@@ -111,7 +113,7 @@ class MediaServer
         $path = $stream->getPublishPath();
         self::$publishStream[$path] = $stream;
         /** 只要加入了流，则直接开始推流 */
-        $stream->on('on_frame', MediaServer::class.'::publisherOnFrame');
+        $stream->on('on_frame', MediaServer::class . '::publisherOnFrame');
         $stream->is_on_frame = true;
     }
 
@@ -199,6 +201,7 @@ class MediaServer
     public static bool $hasSendImportantFrame = false;
 
     public static int $count = 0;
+
     /**
      * 转发流媒体数据
      * @param $publisher PublishStreamInterface 发布者 可以是音频，可以是视频
@@ -208,12 +211,12 @@ class MediaServer
     static function publisherOnFrame(MediaFrame $frame, PublishStreamInterface $publisher)
     {
         /** 收集关键帧 */
-        if (self::$hasSendImportantFrame == false ){
-            self::addKeyFrame($frame,$publisher);
+        if (self::$hasSendImportantFrame == false) {
+            self::addKeyFrame($publisher);
         }
 
         /** 将数据发送给连接了网关的客户端 ,发送原始数据 */
-        RtmpDemo::$gatewayBuffer[] = [ 'cmd'=>'frame', 'socket'=>null, 'data'=>[ 'path'=>$publisher->getPublishPath(), 'frame'=>$frame->_buffer, 'timestamp'=>$frame->timestamp??0,  'type'=>$frame->FRAME_TYPE, 'important'=>0, 'keyCount'=>0]];
+        RtmpDemo::$gatewayBuffer[] = ['cmd' => 'frame', 'socket' => null, 'data' => ['path' => $publisher->getPublishPath(), 'frame' => $frame->_buffer, 'timestamp' => $frame->timestamp ?? 0, 'type' => $frame->FRAME_TYPE, 'important' => 0, 'keyCount' => 0]];
 
 
         /** 获取这个媒体路径下的所有播放设备 */
@@ -228,18 +231,19 @@ class MediaServer
 
     /**
      * 添加关键帧
-     * @param MediaFrame $frame
-     * @param PublishStreamInterface $publisher
+     * @param PublishStreamInterface $publishStream
      */
-    public static function addKeyFrame(MediaFrame $frame, PublishStreamInterface $publisher){
+    public static function addKeyFrame(PublishStreamInterface $publishStream)
+    {
         /** 将关键帧转发到网关 必须要先发送关键帧，播放器才可以正常播放 */
-
+        $gopCacheQueue = $publishStream->getGopCacheQueue();
+        $totalCount = count($gopCacheQueue) + 3;
+        if ($totalCount >= 400) {
             /** 先清空 */
             //RtmpDemo::$gatewayImportantFrame = [];
             self::$count = 0;
             /** 缓存所有的关键帧 */
             $array = [];
-            $publishStream = $publisher;
 
             /**
              * 发送meta元数据 就是基本参数
@@ -249,16 +253,16 @@ class MediaServer
                 $frame = $publishStream->getMetaDataFrame();
                 /** 将数据发送给连接了网关的客户端 ,发送原始数据*/
                 $array[] = [
-                    'cmd'=>'frame',
-                    'socket'=>null,
-                    'data'=>[
-                        'path'=>$publisher->getPublishPath(),
-                        'frame'=>$frame->_buffer,
-                        'timestamp'=>$frame->timestamp??0,
-                        'type'=>$frame->FRAME_TYPE,
-                        'important'=>1,
-                        'order'=>1,
-                        'keyCount'=>0
+                    'cmd' => 'frame',
+                    'socket' => null,
+                    'data' => [
+                        'path' => $publishStream->getPublishPath(),
+                        'frame' => $frame->_buffer,
+                        'timestamp' => $frame->timestamp ?? 0,
+                        'type' => $frame->FRAME_TYPE,
+                        'important' => 1,
+                        'order' => 1,
+                        'keyCount' => 0
                     ]
                 ];
                 self::$count++;
@@ -273,16 +277,16 @@ class MediaServer
                 $frame = $publishStream->getAVCSequenceFrame();
                 /** 将数据发送给连接了网关的客户端 ,发送原始数据*/
                 $array[] = [
-                    'cmd'=>'frame',
-                    'socket'=>null,
-                    'data'=>[
-                        'path'=>$publisher->getPublishPath(),
-                        'frame'=>$frame->_buffer,
-                        'timestamp'=>$frame->timestamp??0,
-                        'type'=>$frame->FRAME_TYPE,
-                        'important'=>1,
-                        'order'=>2,
-                        'keyCount'=>0
+                    'cmd' => 'frame',
+                    'socket' => null,
+                    'data' => [
+                        'path' => $publishStream->getPublishPath(),
+                        'frame' => $frame->_buffer,
+                        'timestamp' => $frame->timestamp ?? 0,
+                        'type' => $frame->FRAME_TYPE,
+                        'important' => 1,
+                        'order' => 2,
+                        'keyCount' => 0
                     ]
                 ];
                 self::$count++;
@@ -297,16 +301,16 @@ class MediaServer
                 $frame = $publishStream->getAACSequenceFrame();
                 /** 将数据发送给连接了网关的客户端 ,发送原始数据*/
                 $array[] = [
-                    'cmd'=>'frame',
-                    'socket'=>null,
-                    'data'=>[
-                        'path'=>$publisher->getPublishPath(),
-                        'frame'=>$frame->_buffer,
-                        'timestamp'=>$frame->timestamp??0,
-                        'type'=>$frame->FRAME_TYPE,
-                        'important'=>1,
-                        'order'=>3,
-                        'keyCount'=>0
+                    'cmd' => 'frame',
+                    'socket' => null,
+                    'data' => [
+                        'path' => $publishStream->getPublishPath(),
+                        'frame' => $frame->_buffer,
+                        'timestamp' => $frame->timestamp ?? 0,
+                        'type' => $frame->FRAME_TYPE,
+                        'important' => 1,
+                        'order' => 3,
+                        'keyCount' => 0
                     ]
                 ];
                 self::$count++;
@@ -317,34 +321,35 @@ class MediaServer
              * @comment 这个关键帧，存在丢包的情况
              * //todo 这里存在问题，有时候不能够获取完整的关键帧，导致无法播放
              */
-            foreach ($publishStream->getGopCacheQueue() as $frame) {
+            foreach ($gopCacheQueue as $frame) {
                 /** 将数据发送给连接了网关的客户端 ,发送原始数据*/
                 $array[] = [
-                    'cmd'=>'frame',
-                    'socket'=>null,
-                    'data'=>[
-                        'path'=>$publisher->getPublishPath(),
-                        'frame'=>$frame->_buffer,
-                        'timestamp'=>$frame->timestamp??0,
-                        'type'=>$frame->FRAME_TYPE,
-                        'important'=>1,
-                        'order'=>4,
-                        'keyCount'=>0
+                    'cmd' => 'frame',
+                    'socket' => null,
+                    'data' => [
+                        'path' => $publishStream->getPublishPath(),
+                        'frame' => $frame->_buffer,
+                        'timestamp' => $frame->timestamp ?? 0,
+                        'type' => $frame->FRAME_TYPE,
+                        'important' => 1,
+                        'order' => 4,
+                        'keyCount' => 0
                     ]
                 ];
                 /** 统计包的总数 */
                 self::$count++;
             }
             /** 将关键帧的数量写入 */
-            foreach ($array as $smallFrame){
+            foreach ($array as $smallFrame) {
                 $smallFrame['data']['keyCount'] = self::$count;
                 RtmpDemo::$gatewayImportantFrame[] = $smallFrame;
             }
             /** 确保收集到足够的关键帧，否则经过网关转发后，因为缺少关键帧而无法播放 ，但是也不可以过大，如果过大，会导致内存溢出，经过测试400帧是比较理想的，请不要轻易改动 */
-            if (self::$count>=400){
+            if (self::$count >= 400) {
                 self::$hasSendImportantFrame = true;
             }
-            var_dump("关键帧存入完毕,一共=".self::$count."帧");
+            var_dump("关键帧存入完毕,一共=" . self::$count . "帧");
+        }
 
     }
 
@@ -360,7 +365,8 @@ class MediaServer
         /** 获取推流路径  */
         $path = $stream->getPublishPath();
         /** warning：这里屏蔽错误处理 */
-        \set_error_handler(function(){});
+        \set_error_handler(function () {
+        });
         /** 初始化尚未开始推流 */
         $stream->is_on_frame = false;
         /** warning：恢复错误处理 */
