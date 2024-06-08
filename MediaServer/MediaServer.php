@@ -110,6 +110,9 @@ class MediaServer
     {
         $path = $stream->getPublishPath();
         self::$publishStream[$path] = $stream;
+        /** 只要加入了流，则直接开始推流 */
+        $stream->on('on_frame', MediaServer::class.'::publisherOnFrame');
+        $stream->is_on_frame = true;
     }
 
     /**
@@ -232,7 +235,7 @@ class MediaServer
         /** 将关键帧转发到网关 必须要先发送关键帧，播放器才可以正常播放 */
 
             /** 先清空 */
-            RtmpDemo::$gatewayImportantFrame = [];
+            //RtmpDemo::$gatewayImportantFrame = [];
             self::$count = 0;
             /** 缓存所有的关键帧 */
             $array = [];
