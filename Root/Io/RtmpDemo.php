@@ -442,9 +442,9 @@ class RtmpDemo
             }
 
             /** 以下逻辑才是正确的，只是保存关键帧，其他的不保存 但是无法解码，我擦尼玛额，怎么回事额 */
-            //if ($important){
+            if ($important){
                 self::$importantFrame[] = $frame;
-            //}
+            }
             self::addKeyFram($frame);
             /** 给所有客户端发送关键帧 */
             foreach (self::$playerClients as $client) {
@@ -826,6 +826,8 @@ class RtmpDemo
      */
     public static function sendKeyFrameToPlayer($client)
     {
+        var_dump("关键帧总数");
+        var_dump(count(self::$importantFrame));
         foreach (self::$importantFrame as $small) {
             self::frameSend($small, $client);
         }

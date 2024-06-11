@@ -239,7 +239,7 @@ class MediaServer
         $totalCount = count($gopCacheQueue) + 3;
         if ($totalCount >= 400) {
             /** 先清空 */
-            //RtmpDemo::$gatewayImportantFrame = [];
+            RtmpDemo::$gatewayImportantFrame = [];
             self::$count = 0;
             /** 缓存所有的关键帧 */
             $array = [];
