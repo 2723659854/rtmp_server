@@ -216,7 +216,7 @@ class MediaServer
         }
 
         /** 将数据发送给连接了网关的客户端 ,发送原始数据 */
-        RtmpDemo::$gatewayBuffer[] = ['cmd' => 'frame', 'socket' => null, 'data' => ['path' => $publisher->getPublishPath(), 'frame' => $frame->_buffer, 'timestamp' => $frame->timestamp ?? 0, 'type' => $frame->FRAME_TYPE, 'important' => 0, 'keyCount' => 0]];
+        RtmpDemo::$gatewayBuffer[] = ['cmd' => 'frame', 'socket' => null, 'data' => ['path' => $publisher->getPublishPath(),'order'=>0, 'frame' => $frame->_buffer, 'timestamp' => $frame->timestamp ?? 0, 'type' => $frame->FRAME_TYPE, 'important' => 0, 'keyCount' => 0]];
 
 
         /** 获取这个媒体路径下的所有播放设备 */

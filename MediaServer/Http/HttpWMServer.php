@@ -314,7 +314,8 @@ class HttpWMServer
 
             //RtmpDemo::instance()->startPlay($request->connection->getSocket());
 
-
+            RtmpDemo::startPlay($request->connection->getSocket());
+            RtmpDemo::sendKeyFrameToPlayer($request->connection->getSocket());
 
             return true;
         }
