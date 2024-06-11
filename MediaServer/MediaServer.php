@@ -344,7 +344,7 @@ class MediaServer
                 RtmpDemo::$gatewayImportantFrame[] = $smallFrame;
             }
             /** 确保收集到足够的关键帧，否则经过网关转发后，因为缺少关键帧而无法播放 ，但是也不可以过大，如果过大，会导致内存溢出，经过测试400帧是比较理想的，请不要轻易改动 */
-            if (self::$count >= 400) {
+            if (self::$count >= 500) {
                 self::$hasSendImportantFrame = true;
             }
             var_dump("关键帧存入完毕,一共=" . self::$count . "帧");

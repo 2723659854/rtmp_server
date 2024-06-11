@@ -441,8 +441,10 @@ class RtmpDemo
                 $frame = new MetaDataFrame($frame);
             }
 
-            /** 强制保存所有关键帧 ，这个会导致内存溢出，但是可以保证经过网关转发后可以播放。那么建议新增一个接口，更新关键帧 ，而不是追加 */
-            self::$importantFrame[] = $frame;
+            /** 以下逻辑才是正确的，只是保存关键帧，其他的不保存 但是无法解码，我擦尼玛额，怎么回事额 */
+            //if ($important){
+                self::$importantFrame[] = $frame;
+            //}
             self::addKeyFram($frame);
             /** 给所有客户端发送关键帧 */
             foreach (self::$playerClients as $client) {
