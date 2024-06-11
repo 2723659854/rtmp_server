@@ -302,6 +302,8 @@ class RtmpDemo
                                     /** 这个服务端的作用是，把rtmp服务器的数据转发给客户端 ，那么就是可写事件 */
                                     self::add($clientSocket, self::EV_READ, [$this, 'gatewayRead']);
                                     self::add($clientSocket, self::EV_WRITE, [$this, 'gatewayWrite']);
+                                    /** 连接后立即发送关键帧 */
+                                    self::sendKeyFrame($clientSocket,self::$gatewayImportantFrame);
                                 }
 
                                 /** rtmp 服务 长链接 协议直接处理了数据，不会触发onMessage事件，无需设置onMessage */
@@ -612,7 +614,7 @@ class RtmpDemo
         $stringArray = self::splitString($string, 1024);
         foreach ($stringArray as $item) {
             try {
-                fwrite($client, $item);
+                @fwrite($client, $item);
             }catch (\Exception $exception){
                 unset(self::$playerClients[(int)$client]);
                 break;
@@ -767,24 +769,24 @@ class RtmpDemo
     {
 
         /** 当代理客户端可读的时候，先发送关键帧 */
-        if (!isset(self::$hasSendKeyFrame[(int)$fd])) {
-            $array = self::$gatewayImportantFrame;
-            self::sendKeyFrame($fd, $array);
-            $haSendKey = count($array);
-            self::$hasSendKeyFrame[(int)$fd] = $haSendKey;
-            var_dump("第一次发送关键帧:" . $haSendKey);
-        } else {
-            $nowCount = count(self::$gatewayImportantFrame);
-            $oldCount = self::$hasSendKeyFrame[(int)$fd];
-            $add = $nowCount - $oldCount;
-            if ($add) {
-                $array = array_slice(self::$gatewayImportantFrame, $oldCount, $add);
-                self::sendKeyFrame($fd, $array);
-                self::$hasSendKeyFrame[(int)$fd] = $nowCount;
-                var_dump("后面追加关键帧:" . $add);
-            }
-
-        }
+//        if (!isset(self::$hasSendKeyFrame[(int)$fd])) {
+//            $array = self::$gatewayImportantFrame;
+//            self::sendKeyFrame($fd, $array);
+//            $haSendKey = count($array);
+//            self::$hasSendKeyFrame[(int)$fd] = $haSendKey;
+//            var_dump("第一次发送关键帧:" . $haSendKey);
+//        } else {
+//            $nowCount = count(self::$gatewayImportantFrame);
+//            $oldCount = self::$hasSendKeyFrame[(int)$fd];
+//            $add = $nowCount - $oldCount;
+//            if ($add) {
+//                $array = array_slice(self::$gatewayImportantFrame, $oldCount, $add);
+//                self::sendKeyFrame($fd, $array);
+//                self::$hasSendKeyFrame[(int)$fd] = $nowCount;
+//                var_dump("后面追加关键帧:" . $add);
+//            }
+//
+//        }
         /** 然后发送普通帧 */
         $buffer = array_shift(self::$gatewayBuffer);
         if (!empty($buffer)) {
@@ -803,7 +805,7 @@ class RtmpDemo
                 if (is_resource($fd)) {
                     foreach ($stringArray as $item) {
                         try {
-                            fwrite($fd, $item);
+                            @fwrite($fd, $item);
                         }catch (\Exception $exception){
                             unset(RtmpDemo::$allSocket[(int)$fd]);
                             break;
