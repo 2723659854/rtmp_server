@@ -429,8 +429,9 @@ class RtmpDemo
             $timestamp = ($array[1]);
             $important = $array[2];
             $count = $array[3];
-            $frame = $array[4];
-            //$string = $type."\r\n".$timestamp."\r\n".$important."\r\n".$order."\r\n".$frame."\r\n\r\n";
+            $path = $array[4];
+            $frame = $array[5];
+            //$string = $type . "\r\n" . $timestamp . "\r\n" . $important . "\r\n" . $count . "\r\n".$path."\r\n" . $data . "\r\n\r\n";
             /** 目前播放器可以拉流，缓冲数据，无法播放，不知道是什么原因 */
             if ($type == MediaFrame::VIDEO_FRAME) {
                 $frame = new VideoFrame($frame, $timestamp);
@@ -439,16 +440,15 @@ class RtmpDemo
             } else {
                 $frame = new MetaDataFrame($frame);
             }
-            /** 以下逻辑才是正确的，只是保存关键帧，其他的不保存 但是无法解码，我擦尼玛额，怎么回事额 */
-            //if ($important){
-                self::$importantFrame[] = $frame;
-            //}
+
+            /** 存储所有的音视频帧 （这个方法不合理，当内存耗尽之后，进程会崩溃退出，等后面想个办法再处理） */
+            self::$importantFrame[$path][] = $frame;
             /** 给所有客户端发送关键帧 */
             foreach (self::$playerClients as $client) {
                 /** 必须是客户端 */
                 if (is_resource($client)) {
                     /** 必须已经发送了flv头和关键帧，否则浏览器无法解析文件 */
-                    if (isset(self::$hasSendKeyFrame[(int)$client])){
+                    if (isset(self::$hasSendKeyFrame[$path][(int)$client])) {
                         self::frameSend($frame, $client);
                     }
                 }
@@ -456,16 +456,14 @@ class RtmpDemo
         }
     }
 
-    //todo  网关客户端加入后，立即推流
-
 
     /**
      * 检测关键帧，追加到缓存中
      * @param MediaFrame $frame
      * @return void
-     * @comment 方法有效，但是当推流开始后，将不会再发送关键帧
+     * @comment 方法有效，但是当推流开始后，将不会再发送关键帧，所以暂时用不上
      */
-    public static function addKeyFrame(MediaFrame $frame)
+    public static function addKeyFrame(MediaFrame $frame, string $path)
     {
         /** 将音频帧的关键帧加入到队列 */
         if ($frame->FRAME_TYPE == MediaFrame::AUDIO_FRAME) {
@@ -483,7 +481,7 @@ class RtmpDemo
                     var_dump("收到音频关键帧");
                     //音频关键帧缓存
                     /** 保存音频关键帧 */
-                    self::$importantFrame[] = $frame;
+                    self::$importantFrame[$path][] = $frame;
                 }
             }
         }
@@ -506,7 +504,7 @@ class RtmpDemo
                     //skip avc sequence
                 } else {
                     /** 保存视频关键帧 */
-                    self::$importantFrame[] = $frame;
+                    self::$importantFrame[$path][] = $frame;
                     var_dump("收到视频关键帧");
                 }
             }
@@ -748,10 +746,10 @@ class RtmpDemo
                 $timestamp = $buffer['data']['timestamp'];
                 $data = $buffer['data']['frame'];
                 $important = $buffer['data']['important'];
-                $order = $buffer['data']['order'];
+                $path = $buffer['data']['path'];
                 $count = $buffer['data']['keyCount'];
                 /** 使用http之类的文本分隔符 ，一整个报文之间用换行符分割 ，这个鸡儿协议真难搞 */
-                $string = $type . "\r\n" . $timestamp . "\r\n" . $important . "\r\n" . $count . "\r\n" . $data . "\r\n\r\n";
+                $string = $type . "\r\n" . $timestamp . "\r\n" . $important . "\r\n" . $count . "\r\n" . $path . "\r\n" . $data . "\r\n\r\n";
 
                 /** 他么的这数据也太长了，将数据切片发送 */
                 $stringArray = self::splitString($string, 1024);
@@ -781,8 +779,9 @@ class RtmpDemo
                 $data = $buffer['data']['frame'];
                 $important = $buffer['data']['important'];
                 //$order = $buffer['data']['order'];
+                $path = $buffer['data']['path'];
                 /** 使用http之类的文本分隔符 ，一整个报文之间用换行符分割 ，这个鸡儿协议真难搞 */
-                $string = $type . "\r\n" . $timestamp . "\r\n" . $important . "\r\n0\r\n" . $data . "\r\n\r\n";
+                $string = $type . "\r\n" . $timestamp . "\r\n" . $important . "\r\n0\r\n" . $path . "\r\n" . $data . "\r\n\r\n";
 
                 /** 他么的这数据也太长了，将数据切片发送 */
                 $stringArray = self::splitString($string, 1024);
@@ -790,7 +789,7 @@ class RtmpDemo
                     foreach ($stringArray as $item) {
                         try {
                             @fwrite($fd, $item);
-                        }catch (\Exception $exception){
+                        } catch (\Exception $exception) {
                             unset(RtmpDemo::$allSocket[(int)$fd]);
                             break;
                         }
@@ -803,20 +802,22 @@ class RtmpDemo
 
     /** 已发送关键帧 */
     public static array $hasSendKeyFrame = [];
+
     /**
      * 向播放器推送关键帧
      * @param $client
      * @return void
      */
-    public static function sendKeyFrameToPlayer($client)
+    public static function sendKeyFrameToPlayer($client, $path)
     {
-        var_dump("关键帧总数");
-        var_dump(count(self::$importantFrame));
-        foreach (self::$importantFrame as $small) {
-            self::frameSend($small, $client);
+        if (isset(self::$importantFrame[$path])) {
+            foreach (self::$importantFrame[$path] as $small) {
+                self::frameSend($small, $client);
+            }
+
+            self::$hasSendKeyFrame[$path][(int)$client] = 1;
+            var_dump("发送关键帧完成");
         }
-        var_dump("发送关键帧完成");
-        self::$hasSendKeyFrame[(int)$client] = 1;
     }
 
     /** 链接到本flv服务器的客户端 */
@@ -840,7 +841,7 @@ class RtmpDemo
             foreach (self::$allSocket as $key => $value) {
                 if (!is_resource($value)) {
                     /** 如果客户端掉线了，那么需要重新创建一个代理客户端 */
-                    if ($value == self::$flvClient){
+                    if ($value == self::$flvClient) {
                         $this->createFlvClient();
                     }
                     /** 删除已掉线的所有客户端 */
