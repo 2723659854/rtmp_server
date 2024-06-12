@@ -213,11 +213,10 @@ class MediaServer
         /** 收集关键帧 */
         if (self::$hasSendImportantFrame == false) {
             self::addKeyFrame($publisher);
+        } else {
+            /** 发送了关键帧之后，将数据发送给连接了网关的客户端 ,发送原始数据 */
+            RtmpDemo::$gatewayBuffer[] = ['cmd' => 'frame', 'socket' => null, 'data' => ['path' => $publisher->getPublishPath(), 'order' => 0, 'frame' => $frame->_buffer, 'timestamp' => $frame->timestamp ?? 0, 'type' => $frame->FRAME_TYPE, 'important' => 0, 'keyCount' => 0]];
         }
-
-        /** 将数据发送给连接了网关的客户端 ,发送原始数据 */
-        RtmpDemo::$gatewayBuffer[] = ['cmd' => 'frame', 'socket' => null, 'data' => ['path' => $publisher->getPublishPath(),'order'=>0, 'frame' => $frame->_buffer, 'timestamp' => $frame->timestamp ?? 0, 'type' => $frame->FRAME_TYPE, 'important' => 0, 'keyCount' => 0]];
-
         /** 获取这个媒体路径下的所有播放设备 */
         foreach (self::getPlayStreams($publisher->getPublishPath()) as $playStream) {
             /** 如果播放器不是空闲状态 */
@@ -346,8 +345,13 @@ class MediaServer
             /** 确保收集到足够的关键帧，否则经过网关转发后，因为缺少关键帧而无法播放 ，但是也不可以过大，如果过大，会导致内存溢出，经过测试400帧是比较理想的，请不要轻易改动 */
             if (self::$count >= 500) {
                 self::$hasSendImportantFrame = true;
+                var_dump("关键帧存入完毕,一共=" . self::$count . "帧");
+                /** 在这里发送关键帧，确保客户端一定可以接收到关键帧 */
+                foreach (RtmpDemo::$flvClients as $client) {
+                    RtmpDemo::sendKeyFrame($client, RtmpDemo::$gatewayImportantFrame);
+                }
+                var_dump("发送关键帧完毕");
             }
-            var_dump("关键帧存入完毕,一共=" . self::$count . "帧");
         }
 
     }

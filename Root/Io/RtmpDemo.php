@@ -302,8 +302,8 @@ class RtmpDemo
                                     /** 这个服务端的作用是，把rtmp服务器的数据转发给客户端 ，那么就是可写事件 */
                                     self::add($clientSocket, self::EV_READ, [$this, 'gatewayRead']);
                                     self::add($clientSocket, self::EV_WRITE, [$this, 'gatewayWrite']);
-                                    /** 连接后立即发送关键帧 */
-                                    self::sendKeyFrame($clientSocket,self::$gatewayImportantFrame);
+                                    /** 要求服务端强制更新关键帧 */
+                                    MediaServer::$hasSendImportantFrame = false;
                                 }
 
                                 /** rtmp 服务 长链接 协议直接处理了数据，不会触发onMessage事件，无需设置onMessage */
@@ -372,9 +372,6 @@ class RtmpDemo
         /** 给客户端创建读写事件 ,不需要想服务端发送任何数据 */
         self::add(self::$flvClient, self::EV_READ, [$this, 'flvRead']);
         self::add(self::$flvClient, self::EV_WRITE, [$this, 'flvWrite']);
-        /** 给网关服务器发送消息 */
-        //fwrite(self::$flvClient,'hello');
-
         return $socket;
     }
 
@@ -386,6 +383,8 @@ class RtmpDemo
      */
     public function startFlvGateway()
     {
+        /** 将内存限制设置为1024MB ，使用内存作为缓存，解决直播时候内存不足的问题 */
+        ini_set('memory_limit', '1024M');
         /** 创建flv服务器 */
         $this->createFlvSever();
         /** 先创建一个客户端和flv服务器通信 */
@@ -440,16 +439,18 @@ class RtmpDemo
             } else {
                 $frame = new MetaDataFrame($frame);
             }
-
             /** 以下逻辑才是正确的，只是保存关键帧，其他的不保存 但是无法解码，我擦尼玛额，怎么回事额 */
-            if ($important){
+            //if ($important){
                 self::$importantFrame[] = $frame;
-            }
-            self::addKeyFram($frame);
+            //}
             /** 给所有客户端发送关键帧 */
             foreach (self::$playerClients as $client) {
+                /** 必须是客户端 */
                 if (is_resource($client)) {
-                    self::frameSend($frame, $client);
+                    /** 必须已经发送了flv头和关键帧，否则浏览器无法解析文件 */
+                    if (isset(self::$hasSendKeyFrame[(int)$client])){
+                        self::frameSend($frame, $client);
+                    }
                 }
             }
         }
@@ -458,7 +459,13 @@ class RtmpDemo
     //todo  网关客户端加入后，立即推流
 
 
-    public static function addKeyFram(MediaFrame $frame)
+    /**
+     * 检测关键帧，追加到缓存中
+     * @param MediaFrame $frame
+     * @return void
+     * @comment 方法有效，但是当推流开始后，将不会再发送关键帧
+     */
+    public static function addKeyFrame(MediaFrame $frame)
     {
         /** 将音频帧的关键帧加入到队列 */
         if ($frame->FRAME_TYPE == MediaFrame::AUDIO_FRAME) {
@@ -602,13 +609,11 @@ class RtmpDemo
             $content .= "Access-Control-Allow-Origin: *\r\n";
             $content .= "\r\n";
             /** 向浏览器发送数据 */
-            //fwrite($client, $content . \dechex(\strlen($data)) . "\r\n$data\r\n");
             $string = $content . \dechex(\strlen($data)) . "\r\n$data\r\n";
             /** 标记已发送过头部了 */
             self::$hasSendHeader[(int)$client] = 1;
         } else {
             /** 直接发送分块后的flv数据 */
-            //fwrite($client, \dechex(\strlen($data)) . "\r\n$data\r\n");
             $string = \dechex(\strlen($data)) . "\r\n$data\r\n";
         }
 
@@ -655,11 +660,11 @@ class RtmpDemo
         if (!empty($buffer)) {
             if ($buffer['to'] == 'server') {
                 $string = json_encode($buffer);
-                fwrite($fd, $string, strlen($string));
+                @fwrite($fd, $string, strlen($string));
             } else {
                 $socket = $buffer['socket'];
                 $client = self::$playerClients[(int)$socket];
-                fwrite($client, $buffer['data']['buffer']);
+                @fwrite($client, $buffer['data']['buffer']);
             }
         }
     }
@@ -716,8 +721,6 @@ class RtmpDemo
     /** 存放关键帧 ，当代理客户端链接后，立刻发送关键帧 */
     public static array $gatewayImportantFrame = [];
 
-    /** 是否已经给客户端发送了关键帧 */
-    public static array $hasSendKeyFrame = [];
 
     /** 按固定长度切割字符串 */
     public static function splitString($str, $length)
@@ -737,7 +740,6 @@ class RtmpDemo
      */
     public static function sendKeyFrame($fd, $array)
     {
-//        $array = self::$gatewayImportantFrame;
         foreach ($array as $buffer) {
             if ($buffer['cmd'] == 'frame') {
                 /** 保持数据的原始性，尽量不添加其他数据 */
@@ -754,12 +756,11 @@ class RtmpDemo
                 $stringArray = self::splitString($string, 1024);
                 if (is_resource($fd)) {
                     foreach ($stringArray as $item) {
-                        fwrite($fd, $item);
+                        @fwrite($fd, $item);
                     }
                 }
             }
         }
-
     }
 
     /**
@@ -769,26 +770,6 @@ class RtmpDemo
      */
     public function gatewayWrite($fd)
     {
-
-        /** 当代理客户端可读的时候，先发送关键帧 */
-//        if (!isset(self::$hasSendKeyFrame[(int)$fd])) {
-//            $array = self::$gatewayImportantFrame;
-//            self::sendKeyFrame($fd, $array);
-//            $haSendKey = count($array);
-//            self::$hasSendKeyFrame[(int)$fd] = $haSendKey;
-//            var_dump("第一次发送关键帧:" . $haSendKey);
-//        } else {
-//            $nowCount = count(self::$gatewayImportantFrame);
-//            $oldCount = self::$hasSendKeyFrame[(int)$fd];
-//            $add = $nowCount - $oldCount;
-//            if ($add) {
-//                $array = array_slice(self::$gatewayImportantFrame, $oldCount, $add);
-//                self::sendKeyFrame($fd, $array);
-//                self::$hasSendKeyFrame[(int)$fd] = $nowCount;
-//                var_dump("后面追加关键帧:" . $add);
-//            }
-//
-//        }
         /** 然后发送普通帧 */
         $buffer = array_shift(self::$gatewayBuffer);
         if (!empty($buffer)) {
@@ -819,6 +800,8 @@ class RtmpDemo
         }
     }
 
+    /** 已发送关键帧 */
+    public static array $hasSendKeyFrame = [];
     /**
      * 向播放器推送关键帧
      * @param $client
@@ -832,6 +815,7 @@ class RtmpDemo
             self::frameSend($small, $client);
         }
         var_dump("发送关键帧完成");
+        self::$hasSendKeyFrame[(int)$client] = 1;
     }
 
     /** 链接到本flv服务器的客户端 */
@@ -854,6 +838,11 @@ class RtmpDemo
             /** 需要监听socket，自动清理已报废的链接 */
             foreach (self::$allSocket as $key => $value) {
                 if (!is_resource($value)) {
+                    /** 如果客户端掉线了，那么需要重新创建一个代理客户端 */
+                    if ($value == self::$flvClient){
+                        $this->createFlvClient();
+                    }
+                    /** 删除已掉线的所有客户端 */
                     unset(self::$allSocket[$key]);
                 }
             }
@@ -899,16 +888,6 @@ class RtmpDemo
                                     self::$playerClients[(int)$clientSocket] = $clientSocket;
                                     /** 保存链接 */
                                     self::$clientTcpConnections[(int)$clientSocket] = $connection;
-
-                                    /** 这里存在问题：客户端还没有请求播放，服务端已经把数据发送过去了 */
-
-//                                    /** 发送开播命令 */
-//                                    self::startPlay($clientSocket);
-//                                    /** 发送关键帧 */
-//                                    foreach (self::$importantFrame as $small) {
-//                                        self::frameSend($small, $clientSocket);
-//                                    }
-//                                    var_dump("发送关键帧完成" . count(self::$importantFrame));
                                 }
 
                             } catch (\Exception|\RuntimeException $exception) {
