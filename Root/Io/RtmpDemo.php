@@ -616,18 +616,19 @@ class RtmpDemo
             /** 直接发送分块后的flv数据 */
             $string = \dechex(\strlen($data)) . "\r\n$data\r\n";
         }
-
-        /** 数据切片后发送 */
-        $stringArray = self::splitString($string, 1024);
-        foreach ($stringArray as $item) {
-            try {
-                @fwrite($client, $item);
-            }catch (\Exception $exception){
-                unset(self::$playerClients[(int)$client]);
-                break;
-            }
-
-        }
+        /** 不切片，直接发送，因为我怀疑如果切片，会导致浏览器拉去数据失败，掉帧，播放失败 */
+        @fwrite($client, $string);
+//        /** 数据切片后发送 */
+//        $stringArray = self::splitString($string, 1024);
+//        foreach ($stringArray as $item) {
+//            try {
+//                @fwrite($client, $item);
+//            }catch (\Exception $exception){
+//                unset(self::$playerClients[(int)$client]);
+//                break;
+//            }
+//
+//        }
 
     }
 
