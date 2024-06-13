@@ -6,6 +6,7 @@ namespace MediaServer\Rtmp;
 use MediaServer\MediaReader\AVCPacket;
 use MediaServer\MediaReader\MediaFrame;
 use MediaServer\MediaReader\VideoFrame;
+use MediaServer\MediaServer;
 use Root\Io\RtmpDemo;
 
 
@@ -79,6 +80,10 @@ trait RtmpVideoHandlerTrait
                         /** 是h256编码  */
                         $avcPack->avcPacketType === AVCPacket::AVC_PACKET_TYPE_NALU) {
                         $this->gopCacheQueue = [];
+                        /** 清理代理网关缓存 */
+                        RtmpDemo::$gatewayImportantFrame =[];
+                        RtmpDemo::$gatewayBuffer = [];
+                        MediaServer::$hasSendImportantFrame = false;
                     }
 
                     /** 传递JPEG编码，同时传递包的详细信息（帧率，分辨率等） */
