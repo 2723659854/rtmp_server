@@ -2,7 +2,7 @@
 
     /**
      * SabreAMF_AMF3_AcknowledgeMessage
-     *
+     * 消息确认类，用于回复已接收到的命令
      * @uses SabreAMF_AMF3_AbstractMessage
      * @package SabreAMF
      * @subpackage AMF3

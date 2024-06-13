@@ -5,7 +5,8 @@
      * SabreAMF_OutputStream 
      *
      * This class provides methods to encode bytes, longs, strings, int's etc. to a binary format
-     * 
+     * 本对象提供方法将字节码，长整型，字符串编码成二进制
+     *
      * @package SabreAMF 
      * @version $Id: OutputStream.php 233 2009-06-27 23:10:34Z evertpot $
      * @copyright Copyright (C) 2006-2009 Rooftop Solutions. All rights reserved.
@@ -23,7 +24,8 @@
 
         /**
          * writeBuffer 
-         * 
+         * 写入暂存区
+         *
          * @param string $str 
          * @return void
          */
@@ -32,7 +34,8 @@
         }
 
         /**
-         * writeByte 
+         * writeByte
+         * 写入二进制
          * 
          * @param int $byte 
          * @return void
@@ -45,7 +48,8 @@
 
         /**
          * writeInt 
-         * 
+         * 写入整型
+         *
          * @param int $int 
          * @return void
          */
@@ -73,7 +77,8 @@
 
         /**
          * writeLong 
-         * 
+         * 写入长整型
+         *
          * @param int $long 
          * @return void
          */
@@ -85,7 +90,8 @@
         }
 
         /**
-         * getRawData 
+         * getRawData
+         * 获取编码后的数据
          * 
          * @return string 
          */

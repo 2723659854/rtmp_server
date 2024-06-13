@@ -14,6 +14,7 @@
 
     /**
      * This message is based on Abstract Message
+     * 报错消息类
      */
     require_once dirname(__FILE__) . '/../AMF3/AcknowledgeMessage.php';
 

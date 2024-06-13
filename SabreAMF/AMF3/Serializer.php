@@ -7,7 +7,7 @@
     require_once dirname(__FILE__) . '/../ByteArray.php';
 
     /**
-     * amf3的数据编码
+     * 对amf3的数据编码
      * SabreAMF_AMF3_Serializer
      *
      * @package SabreAMF

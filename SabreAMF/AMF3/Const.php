@@ -1,7 +1,8 @@
 <?php
 
     /**
-     * SabreAMF_AMF3_Const 
+     * SabreAMF_AMF3_Const
+     * amf3命令的数据类型定义
      * 
      * @package SabreAMF
      * @subpackage AMF3

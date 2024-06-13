@@ -1,7 +1,7 @@
 <?php
 
     /**
-     * amf 二进制数据
+     * amf 二进制数组
      * SabreAMF_ByteArray 
      * 
      * @package SabreAMF

@@ -89,7 +89,7 @@
 
 
         /**
-         * readObject 写入对象
+         * readObject 读取对象
          *
          * @return object
          */

@@ -4,7 +4,8 @@
      * SabreAMF_ITypedObject 
      *
      * This interface can be used to encode your data with a specified classname. The result will be that the flash/flex client will transform the data to an object of the specified classname
-     * 
+     * 此接口可用于使用指定的类名对数据进行编码。结果将是flash/flex客户端将数据转换为指定类名的对象
+     *
      * @package SabreAMF 
      * @version $Id: ITypedObject.php 233 2009-06-27 23:10:34Z evertpot $
      * @copyright Copyright (C) 2006-2009 Rooftop Solutions. All rights reserved.

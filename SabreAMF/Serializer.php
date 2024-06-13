@@ -1,7 +1,7 @@
 <?php
 
     /**
-     * AMF序列化工具
+     * AMF编码
      * SabreAMF_Serializer
      *
      * @package SabreAMF

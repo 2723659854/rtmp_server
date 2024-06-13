@@ -136,6 +136,7 @@
             /** 读取长度 */
             $length = $this->stream->readLong();
             $arr = array();
+            /** &= 运算符用来确保将 $arr 的引用（而不是值的副本）添加到 refList 数组中。这在处理复杂对象图（如循环引用）时是有用的，尤其是在反序列化过程中。 */
             $this->refList[]&=$arr;
             while($length--) $arr[] = $this->readAMFData();
             return $arr;

@@ -1,7 +1,10 @@
 <?php
 
     /**
+     * 扩展类
      * Implement this interface to construct your own Externalized objects..
+     *
+     * 请不要忘记使用classmapper映射你的对象
      * Don't forget to map the object using the classmapper
      * 
      * @package SabreAMF

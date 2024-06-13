@@ -17,7 +17,7 @@
 
     /**
      * In valid AMF exception
-     *
+     * amf消息异常类
      * @uses SabreAMF_DetailException
      */
     class SabreAMF_InvalidAMFException extends Exception implements SabreAMF_DetailException {

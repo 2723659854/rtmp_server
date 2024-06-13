@@ -8,9 +8,10 @@
     require_once dirname(__FILE__) . '/AMF3/Wrapper.php';
 
     /**
-     * 这里定义了amf客户端
+     * 这里定义了amf客户端：用来发送amf控制命令
      * AMF Client
      *
+     * 使用此类可以调用AMF0/AMF3服务。该类使用curlhttp库，因此请确保已安装该库。
      * Use this class to make a calls to AMF0/AMF3 services. The class makes use of the curl http library, so make sure you have this installed.
      * 默认使用amf0编码，你可以更改为amf3编码
      * It sends AMF0 encoded data by default. Change the encoding to AMF3 with setEncoding. sendRequest calls the actual service
@@ -73,7 +74,7 @@
         private $amfResponse;
 
         /**
-         * 默认的编码格式
+         * 默认的编码格式amf0
          * encoding
          *
          * @var int
@@ -88,9 +89,9 @@
          * @return void
          */
         public function __construct($endPoint) {
-
+            /** 初始化节点 */
             $this->endPoint = $endPoint;
-            /** 初始化请求体 */
+            /** 初始化请求体 amf命令消息 */
             $this->amfRequest = new SabreAMF_Message();
             /** 初始化编码工具 */
             $this->amfOutputStream = new SabreAMF_OutputStream();
@@ -104,8 +105,8 @@
          * 向服务端发送请求 需要请求地址，方法名，其他参数
          * sendRequest sends the request to the MediaServer. It expects the servicepath and methodname, and the parameters of the methodcall
          *
-         * @param string $servicePath The servicepath (e.g.: myservice.mymethod)
-         * @param array $data The parameters you want to send
+         * @param string $servicePath The servicepath (e.g.: myservice.mymethod) 服务路径
+         * @param array $data The parameters you want to send 你想发送的任何参数
          * @return mixed
          */
         public function sendRequest($servicePath,$data) {
@@ -122,11 +123,13 @@
                 /** 解码请求路径和请求方法 */
                 // We need to split serviceName.methodName into separate variables
                 $service = explode('.',$servicePath);
+                /** 数组第一个元素是请求方法 get,post,head,option,delete... */
                 $method = array_pop($service);
+                /** 剩下的是路由重新组装成字符串 */
                 $service = implode('.',$service);
                 $message->operation = $method;
                 $message->source = $service;
-
+                /** 用message替换data */
                 $data = $message;
             }
             /** 添加请求数据到body */
@@ -139,7 +142,7 @@
             ));
             /** 序列化要发送的数据 */
             $this->amfRequest->serialize($this->amfOutputStream);
-            /** 发送请求 */
+            /** 发送请求 tcp通信，用的http协议 */
             // The curl request
             $ch = curl_init($this->endPoint);
             curl_setopt($ch,CURLOPT_POST,1);

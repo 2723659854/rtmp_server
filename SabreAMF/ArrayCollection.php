@@ -6,7 +6,8 @@
      * 用于flex 命令
      * This is the default mapping for the flex.messaging.io.ArrayCollection class
      * It can be accessed using most of the normal array access methods
-     *
+     * 在 AMF（Action Message Format）中，Flex 命令指的是一种用于 Adobe Flex 应用程序的特定命令和消息格式。
+     * Flex 是一种基于 Flash 平台的开发框架，用于创建富互联网应用程序（RIA），其通信和数据交换可以使用 AMF 格式来进行序列化和传输。
      * @package SabreAMF
      * @uses SabreAMF_Externalized
      * @uses IteratorAggregate

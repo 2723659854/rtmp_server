@@ -17,7 +17,7 @@
         /**
          * amf 客户端播放器版本
          * AC_Flash
-         *
+         * flash播放命令
          * Specifies FlashPlayer 6.0 - 8.0 client
          */
         const AC_Flash    = 0;

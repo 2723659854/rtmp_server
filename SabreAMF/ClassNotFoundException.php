@@ -19,7 +19,7 @@
 
     /**
      * This is the receipt for ClassException and default values reflective of ColdFusion RPC faults
-     *
+     * 这是ClassException和反映ColdFusion RPC故障的默认值的收据
      * @uses SabreAMF_DetailException
      */
     class SabreAMF_ClassNotFoundException extends Exception implements SabreAMF_DetailException {

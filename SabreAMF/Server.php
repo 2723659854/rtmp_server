@@ -86,11 +86,11 @@
             //file_put_contents($dump.'/' . md5($data),$data);
             /** 设置amf input 流 ，用来读取数据的 */
             $this->amfInputStream = new SabreAMF_InputStream($data);
-            /** 设置afm request */
+            /** 初始化 设置afm request */
             $this->amfRequest = new SabreAMF_Message();
-            /** 设置输出流  */
+            /** 初始化 设置输出流  */
             $this->amfOutputStream = new SabreAMF_OutputStream();
-            /** 设置响应 */
+            /** 初始化 设置响应 */
             $this->amfResponse = new SabreAMF_Message();
             /** 将接收到的数据解码 */
             $this->amfRequest->deserialize($this->amfInputStream);
@@ -142,9 +142,11 @@
         }
 
         /**
+         * 发送响应
          * sendResponse
          *
          * Sends the responses back to the client. Call this after you answered all the requests with setResponse
+         * 发送响应给客户端，当你处理完请求后，调用此函数
          *
          * @return void
          */
@@ -155,7 +157,7 @@
             $this->amfResponse->setEncoding($this->amfRequest->getEncoding());
             /** 将数据编码 */
             $this->amfResponse->serialize($this->amfOutputStream);
-            /** 返回数据 逆天了，返回数据使用的echo */
+            /** 返回数据 逆天了，返回数据使用的echo ，echo是标准输出，并且没有返回值 */
             echo($this->amfOutputStream->getRawData());
 
         }
@@ -247,7 +249,7 @@
         protected function readInput() {
 
             if (is_null(self::$dataInputStream)) return self::$dataInputData;
-
+            /** 这里使用file_get_contents读取数据 */
             $data = file_get_contents(self::$dataInputStream);
             if (!$data) throw new SabreAMF_InvalidAMFException();
 

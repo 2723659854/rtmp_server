@@ -16,9 +16,11 @@
     require_once dirname(__FILE__) . '/AMF3/ErrorMessage.php';
     require_once dirname(__FILE__) . '/ArrayCollection.php';
 
+    /** amf命令映射表 */
     final class SabreAMF_ClassMapper {
 
         /**
+         * 系统默认提供的amf命令
          * @var array
          */
         static public $maps = array(
@@ -31,14 +33,14 @@
 
         /**
          * Assign this callback to intercept calls to getLocalClass
-         *
+         * 分配此回调以拦截对getLocalClass的调用
          * @var callback
          */
         static public $onGetLocalClass;
 
         /**
          * Assign this callback to intercept calls to getRemoteClass
-         *
+         * 设置此回调以拦截对getRemoteClass的调用
          * @var callback
          */
         static public $onGetRemoteClass;
@@ -47,12 +49,14 @@
          * The Constructor
          *
          * We make the constructor private so the class cannot be initialized
+         * 将构造函数私有化，避免被初始化
          *
          * @return void
          */
         private function __construct() { }
 
         /**
+         * 注册对象
          * Register a new class to be mapped
          *
          * @param string $remoteClass

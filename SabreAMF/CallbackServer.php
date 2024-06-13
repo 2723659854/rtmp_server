@@ -18,6 +18,10 @@
      * AMF3 Messaging system, and there is no need to manually construct the AcknowledgeMessage classes.
      * Also, the response to the ping message will be done for you.
      *
+     * 这个MediaServer类和常规MediaServer之间的区别在于，这个MediaServer知道
+     * AMF3消息系统，并且不需要手动构造AcknowledgeMessage类。
+     * 此外，将为您完成对ping消息的响应。
+     *
      * @package SabreAMF
      * @version $Id: CallbackServer.php 233 2009-06-27 23:10:34Z evertpot $
      * @copyright Copyright (C) 2006-2009 Rooftop Solutions. All rights reserved.
@@ -201,7 +205,7 @@
                     } else {
                         $detail = '';
                     }
-
+                    /** 根据amf版本构建异常状态响应内容 */
                     switch($AMFVersion) {
                         case SabreAMF_Const::AMF0 :
                             $response = array(
@@ -222,7 +226,7 @@
                     /** 返回状态为错误 */
                     $status = SabreAMF_Const::R_STATUS;
                 }
-                /** 返回异常 */
+                /** 设置异常 */
                 $this->setResponse($request['response'],$status,$response);
 
             }
