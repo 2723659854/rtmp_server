@@ -9,6 +9,7 @@ use MediaServer\Utils\BitReader;
 
 /**
  * @purpose 音频数据包
+ * @note aac数据包分为两种，一个是aac的AAC sequence header，另一个是aac raw原始数据
  */
 class AACPacket
 {
@@ -53,7 +54,9 @@ class AACPacket
     /**
      * aac序列参数
      * @var AACSequenceParameterSet
-     * @note 主要包括声道和采样率
+     * @note 主要包括声道和采样率，配置，比特率等
+     * @note 在向RTMP服务器推送音频流或者视频流时，首先要推送一个音频tag（AAC sequence header）和视频tag（AVC sequence header），没有这些信息播放端是无法解码音视频流的
+     * @link https://zhuanlan.zhihu.com/p/649512028
      */
     protected $aacSequenceParameterSet;
 

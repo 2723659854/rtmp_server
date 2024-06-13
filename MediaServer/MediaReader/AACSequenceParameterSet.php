@@ -78,6 +78,7 @@ class AACSequenceParameterSet extends BitReader
     /**
      * 读取数据
      * @return void
+     * @note 参考 https://zhuanlan.zhihu.com/p/649512028
      */
     public function readData()
     {
@@ -105,10 +106,15 @@ class AACSequenceParameterSet extends BitReader
             if ($objectType == 29) {
                 $this->ps = 1;
             }
+            /** 扩展配置 */
             $this->extObjectType = 5;
+            /** 频谱带复制 */
             $this->sbr = 1;
+            /** 采样率 */
             $this->sampleRate = ($sampleIndex = $this->getBits(4)) === 0x0f ? $this->getBits(24) : AACPacket::AAC_SAMPLE_RATE[$sampleIndex];
+            /** 采样索引 */
             $this->sampleIndex = $sampleIndex;
+            /** 音频配置类型 */
             $this->objType = ($objectType = $this->getBits(5)) === 31 ? ($this->getBits(6) + 32) : $objectType;
         }
 

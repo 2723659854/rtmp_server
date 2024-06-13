@@ -75,6 +75,7 @@ class AVCSequenceParameterSet extends BitReader
     /**
      * 读取数据
      * @return void
+     * @note 必须对avc的数据格式很清楚才能看明白这一个方法
      */
     public function readData()
     {
@@ -124,7 +125,7 @@ class AVCSequenceParameterSet extends BitReader
         */
 
         //configurationVersion
-        /** 跳过8个字节 */
+        /** 跳过8个字节 就是跳过avc的头 */
         $this->skipBits(8);
         //profile
         /** 获取资源概要 */

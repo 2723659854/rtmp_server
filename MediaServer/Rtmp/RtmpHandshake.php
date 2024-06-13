@@ -5,6 +5,7 @@ namespace MediaServer\Rtmp;
 
 /**
  * @purpose 服务端生成握手的s0s1s2的方法
+ * @note 简单说这个握手，就是服务端接收到c1,立即发送s2；客户端接收到s1，立即发送c2。当客户端收到s2，并且服务端收到c2，握手完成。
  */
 class RtmpHandshake
 {

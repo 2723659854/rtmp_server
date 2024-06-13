@@ -51,11 +51,12 @@ class AudioFrame extends BinaryStream implements MediaFrame
     /** 时间戳 */
     public $timestamp = 0;
 
-
+    /** 播放时间戳 */
     public $pts = 0;
-
+    /** 解码时间戳 */
     public $dts = 0;
 
+    /** 暂存数据 */
     public $_buffer ;
     /**
      * 初始化
@@ -69,18 +70,23 @@ class AudioFrame extends BinaryStream implements MediaFrame
         parent::__construct($data);
         /** 时间戳 */
         $this->timestamp = $timestamp;
-        /** 第一个字节 */
+        /** 第一个字节 一个字节占8个bits */
         $firstByte = $this->readTinyInt();
+
+        /** 右移操作的结果是一个新的整数值，这个值的二进制表示从右边数起第4位到最右边的位数被移出，左边空出的位用0填充。
+        例如，如果 $firstByte 的二进制表示是 11011010，那么 $firstByte >> 4 的结果是 00001101。 */
+
         /** 音频帧格式 */
         $this->soundFormat = $firstByte >> 4;
-        /** 音频码率 */
+        /** 音频码率 先向右移动两位，然后和00000011 进行与运算 */
         $this->soundRate = $firstByte >> 2 & 3;
-        /** 音频数据大小*/
+        /** 音频数据大小 先向右移动一位 然后和00000001进行与运算 */
         $this->soundSize = $firstByte >> 1 & 1;
-        /** 音频类别 */
+        /** 音频类别 直接和1进行与运算 */
         $this->soundType = $firstByte & 1;
-
+        /** 播放时间戳 */
         $this->pts = $this->timestamp;
+        /** 解码时间戳 音频的播放和解码同时进行 */
         $this->dts = $this->timestamp;
     }
 
@@ -107,6 +113,11 @@ class AudioFrame extends BinaryStream implements MediaFrame
         return true;
     }
 
+    /**
+     * 转字符串
+     * @return mixed|string
+     * @note 当调用(string)AudioFrame的时候，就会调用这个方法
+     */
     public function __toString()
     {
         return $this->dump();
@@ -176,6 +187,10 @@ class AudioFrame extends BinaryStream implements MediaFrame
     }
 
 
+    /**
+     * 销毁音频包
+     * @return void
+     */
     public function destroy()
     {
         $this->aacPacket = null;

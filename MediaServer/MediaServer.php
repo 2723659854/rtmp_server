@@ -215,7 +215,25 @@ class MediaServer
             self::addKeyFrame($publisher);
         } else {
             /** 发送了关键帧之后，将数据发送给连接了网关的客户端 ,发送原始数据 */
-            RtmpDemo::$gatewayBuffer[] = ['cmd' => 'frame', 'socket' => null, 'data' => ['path' => $publisher->getPublishPath(), 'order' => 0, 'frame' => $frame->_buffer, 'timestamp' => $frame->timestamp ?? 0, 'type' => $frame->FRAME_TYPE, 'important' => 0, 'keyCount' => 0]];
+            //$data = ['cmd' => 'frame', 'socket' => null, 'data' => ['path' => $publisher->getPublishPath(), 'order' => 0, 'frame' => $frame->_buffer, 'timestamp' => $frame->timestamp ?? 0, 'type' => $frame->FRAME_TYPE, 'important' => 1, 'keyCount' => 0]];
+            $data = [
+                'cmd' => 'frame',
+                'socket' => null,
+                'data' => [
+                    'path' => $publisher->getPublishPath(),
+                    'frame' => $frame->_buffer,
+                    'timestamp' => $frame->timestamp ?? 0,
+                    'type' => $frame->FRAME_TYPE,
+                    'important' => 1,
+                    'order' => 4,
+                    'keyCount' => 0
+                ]
+            ];
+            /** 过滤已发送过的关键帧 */
+            if (!in_array($data,RtmpDemo::$gatewayImportantFrame)){
+                $data['important'] = 0;
+                RtmpDemo::$gatewayBuffer[] = $data;
+            }
         }
         /** 获取这个媒体路径下的所有播放设备 */
         foreach (self::getPlayStreams($publisher->getPublishPath()) as $playStream) {
@@ -226,6 +244,10 @@ class MediaServer
             }
         }
     }
+
+    public static $aacKeyFrame = null;
+
+    public static $avcKeyFrame = null;
 
     /**
      * 添加关键帧
@@ -249,6 +271,7 @@ class MediaServer
              */
             if ($publishStream->isMetaData()) {
                 $frame = $publishStream->getMetaDataFrame();
+
                 /** 将数据发送给连接了网关的客户端 ,发送原始数据*/
                 $array[] = [
                     'cmd' => 'frame',
@@ -259,7 +282,7 @@ class MediaServer
                         'timestamp' => $frame->timestamp ?? 0,
                         'type' => $frame->FRAME_TYPE,
                         'important' => 1,
-                        'order' => 1,
+                        'order' => 'meta',
                         'keyCount' => 0
                     ]
                 ];
@@ -270,9 +293,11 @@ class MediaServer
             /**
              * 发送视频avc数据
              * avc sequence send
+             * @note 必須發送，否則無法解碼視頻幀
              */
             if ($publishStream->isAVCSequence()) {
                 $frame = $publishStream->getAVCSequenceFrame();
+                self::$avcKeyFrame = $frame;
                 /** 将数据发送给连接了网关的客户端 ,发送原始数据*/
                 $array[] = [
                     'cmd' => 'frame',
@@ -283,7 +308,7 @@ class MediaServer
                         'timestamp' => $frame->timestamp ?? 0,
                         'type' => $frame->FRAME_TYPE,
                         'important' => 1,
-                        'order' => 2,
+                        'order' => 'avc',
                         'keyCount' => 0
                     ]
                 ];
@@ -294,9 +319,11 @@ class MediaServer
             /**
              * 发送音频aac数据
              * aac sequence send
+             * @note 必須發送，否則無法解碼音頻幀
              */
             if ($publishStream->isAACSequence()) {
                 $frame = $publishStream->getAACSequenceFrame();
+                self::$aacKeyFrame = $frame;
                 /** 将数据发送给连接了网关的客户端 ,发送原始数据*/
                 $array[] = [
                     'cmd' => 'frame',
@@ -307,7 +334,7 @@ class MediaServer
                         'timestamp' => $frame->timestamp ?? 0,
                         'type' => $frame->FRAME_TYPE,
                         'important' => 1,
-                        'order' => 3,
+                        'order' => 'aac',//修改为seq
                         'keyCount' => 0
                     ]
                 ];

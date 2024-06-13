@@ -21,7 +21,40 @@ use MediaServer\Utils\WMBufferStream;
  * @package MediaServer\Rtmp
  * DuplexMediaStreamInterface 推流和播放的接口
  * VerifyAuthStreamInterface 鉴权接口
+ * @note  简要介绍
  *
+ * 播放一个RTMP协议的流媒体需要经过以下几个步骤：握手，建立连接，建立流，播放。RTMP连接都是以握手作为开始的。建立连接阶段用于建立客户端与服务器
+ * 之间的“网络连接”；建立流阶段用于建立客户端与服务器之间的“网络流”；播放阶段用于传输视音频数据。
+ *
+ * 2 握手（HandShake）
+ *
+ * 一个RTMP连接以握手开始，双方分别发送大小固定的三个数据块
+ *
+ * a)        握手开始于客户端发送C0、C1块。服务器收到C0或C1后发送S0和S1。
+ * b)        当客户端收齐S0和S1后，开始发送C2。当服务器收齐C0和C1后，开始发送S2。
+ * c)        当客户端和服务器分别收到S2和C2后，握手完成。
+ *
+ * 3建立网络连接（NetConnection）
+ *
+ * a)        客户端发送命令消息中的“连接”(connect)到服务器，请求与一个服务应用实例建立连接。
+ * b)        服务器接收到连接命令消息后，发送确认窗口大小(Window Acknowledgement Size)协议消息到客户端，同时连接到连接命令中提到的应用程序。
+ * c)        服务器发送设置带宽()协议消息到客户端。
+ * d)        客户端处理设置带宽协议消息后，发送确认窗口大小(Window Acknowledgement Size)协议消息到服务器端。
+ * e)        服务器发送用户控制消息中的“流开始”(Stream Begin)消息到客户端。
+ * f)         服务器发送命令消息中的“结果”(_result)，通知客户端连接的状态。
+ *
+ * 4建立网络流（NetStream）
+ *
+ * a)      客户端发送命令消息中的“创建流”（createStream）命令到服务器端。
+ * b)      服务器端接收到“创建流”命令后，发送命令消息中的“结果”(_result)，通知客户端流的状态。
+ *
+ * 5 播放（Play）
+ *
+ * a)        客户端发送命令消息中的“播放”（play）命令到服务器。
+ * b)        接收到播放命令后，服务器发送设置块大小（ChunkSize）协议消息。
+ * c)        服务器发送用户控制消息中的“streambegin”，告知客户端流ID。
+ * d)        播放命令成功的话，服务器发送命令消息中的“响应状态” NetStream.Play.Start & NetStream.Play.reset，告知客户端“播放”命令执行成功。
+ * e)        在此之后服务器发送客户端要播放的音频和视频数据。
  */
 class RtmpStream extends EventEmitter implements DuplexMediaStreamInterface, VerifyAuthStreamInterface
 {

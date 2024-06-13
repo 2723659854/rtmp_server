@@ -406,6 +406,9 @@ class RtmpDemo
     /** 后面客户端播放后追加的关键帧 */
     public static $addKeyFrameAfterPlay = [];
 
+    /** 解码用的三个关键帧 */
+    public static $seq = [];
+
     /**
      * 这里是flv客户端向播放器推送数据
      * @param $fd
@@ -430,8 +433,9 @@ class RtmpDemo
             $important = $array[2];
             $count = $array[3];
             $path = $array[4];
-            $frame = $array[5];
-            //$string = $type . "\r\n" . $timestamp . "\r\n" . $important . "\r\n" . $count . "\r\n".$path."\r\n" . $data . "\r\n\r\n";
+            $seq = $array[5];
+            $frame = $array[6];
+            $string = $type . "\r\n" . $timestamp . "\r\n" . $important . "\r\n" . $count . "\r\n".$path."\r\n" .$seq."\r\n". $frame . "\r\n\r\n";
             /** 目前播放器可以拉流，缓冲数据，无法播放，不知道是什么原因 */
             if ($type == MediaFrame::VIDEO_FRAME) {
                 $frame = new VideoFrame($frame, $timestamp);
@@ -441,8 +445,15 @@ class RtmpDemo
                 $frame = new MetaDataFrame($frame);
             }
 
+            if (in_array($seq,['aac','avc','meta'])){
+                self::$seq[$path][] = $frame;
+            }
+
             /** 存储所有的音视频帧 （这个方法不合理，当内存耗尽之后，进程会崩溃退出，等后面想个办法再处理） */
-            self::$importantFrame[$path][] = $frame;
+            if ($important){
+                self::$importantFrame[$path][] = $frame;
+            }
+
             /** 给所有客户端发送关键帧 */
             foreach (self::$playerClients as $client) {
                 /** 必须是客户端 */
@@ -748,8 +759,9 @@ class RtmpDemo
                 $important = $buffer['data']['important'];
                 $path = $buffer['data']['path'];
                 $count = $buffer['data']['keyCount'];
+                $seq = $buffer['data']['order'];
                 /** 使用http之类的文本分隔符 ，一整个报文之间用换行符分割 ，这个鸡儿协议真难搞 */
-                $string = $type . "\r\n" . $timestamp . "\r\n" . $important . "\r\n" . $count . "\r\n" . $path . "\r\n" . $data . "\r\n\r\n";
+                $string = $type . "\r\n" . $timestamp . "\r\n" . $important . "\r\n" . $count . "\r\n" . $path . "\r\n" .$seq."\r\n". $data . "\r\n\r\n";
 
                 /** 他么的这数据也太长了，将数据切片发送 */
                 $stringArray = self::splitString($string, 1024);
@@ -760,6 +772,35 @@ class RtmpDemo
                 }
             }
         }
+    }
+
+
+    /**
+     * 发送关键帧
+     * @param MediaFrame $frame
+     * @param string $path
+     * @return void
+     */
+    public static function changeFrame2ArrayAndSend(MediaFrame $frame,string $path)
+    {
+        $newFrame = [
+            'cmd' => 'frame',
+            'socket' => null,
+            'data' => [
+                'path' => $path,
+                'frame' => $frame->_buffer,
+                'timestamp' => $frame->timestamp ?? 0,
+                'type' => $frame->FRAME_TYPE,
+                'important' => 1,
+                'order' => 4,
+                'keyCount' => 0
+            ]
+        ];
+
+        /** 发送 */
+        RtmpDemo::$gatewayBuffer[]= $newFrame;
+        /** 更新关键帧 I帧 P帧 */
+        RtmpDemo::$gatewayImportantFrame[] = $newFrame;
     }
 
     /**
@@ -778,10 +819,10 @@ class RtmpDemo
                 $timestamp = $buffer['data']['timestamp'];
                 $data = $buffer['data']['frame'];
                 $important = $buffer['data']['important'];
-                //$order = $buffer['data']['order'];
+                $seq = $buffer['data']['order'];
                 $path = $buffer['data']['path'];
                 /** 使用http之类的文本分隔符 ，一整个报文之间用换行符分割 ，这个鸡儿协议真难搞 */
-                $string = $type . "\r\n" . $timestamp . "\r\n" . $important . "\r\n0\r\n" . $path . "\r\n" . $data . "\r\n\r\n";
+                $string = $type . "\r\n" . $timestamp . "\r\n" . $important . "\r\n0\r\n" . $path . "\r\n" .$seq."\r\n". $data . "\r\n\r\n";
 
                 /** 他么的这数据也太长了，将数据切片发送 */
                 $stringArray = self::splitString($string, 1024);
@@ -811,12 +852,29 @@ class RtmpDemo
     public static function sendKeyFrameToPlayer($client, $path)
     {
         if (isset(self::$importantFrame[$path])) {
-            foreach (self::$importantFrame[$path] as $small) {
-                self::frameSend($small, $client);
+            /** 先发送解码的关键帧 */
+            if (isset(self::$seq[$path])){
+                foreach (self::$seq[$path] as $frame){
+                    self::frameSend($frame, $client);
+                }
+                var_dump("发送解码命令完成".count(self::$seq[$path]));
+            }else{
+                var_dump("解码的关键帧不存在");
+            }
+
+            /** 再发送其他的关键帧 */
+            $count = count(self::$importantFrame[$path]);
+            /** 只发送最近的300帧 ，并且更新关键帧，防止内存溢出 */
+            if ($count>500){
+                self::$importantFrame[$path] = array_slice(self::$importantFrame[$path],$count-500,500);
+            }
+
+            foreach (self::$importantFrame[$path] as $frame) {
+                self::frameSend($frame, $client);
             }
 
             self::$hasSendKeyFrame[$path][(int)$client] = 1;
-            var_dump("发送关键帧完成");
+            var_dump("发送关键帧完成".count(self::$importantFrame[$path]));
         }
     }
 

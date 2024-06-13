@@ -48,7 +48,9 @@ class AVCPacket
 
 
     /**
-     * @var AACSequenceParameterSet
+     * avc配置参数
+     * @var AVCSequenceParameterSet
+     * @note 在向RTMP服务器推送音频流或者视频流时，首先要推送一个音频tag（AAC sequence header）和视频tag（AVC sequence header），没有这些信息播放端是无法解码音视频流的
      */
     protected $avcSequenceParameterSet;
 
@@ -58,6 +60,7 @@ class AVCPacket
      */
     public function getAVCSequenceParameterSet(){
 
+        /** 如果没有avc的配置参数 ，那么需要解码 */
         if(!$this->avcSequenceParameterSet){
             $this->avcSequenceParameterSet=new AVCSequenceParameterSet($this->stream->readRaw());
         }
