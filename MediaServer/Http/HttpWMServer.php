@@ -314,9 +314,14 @@ class HttpWMServer
 
             //RtmpDemo::instance()->startPlay($request->connection->getSocket());
 
-            RtmpDemo::startPlay($request->connection->getSocket());
-            RtmpDemo::sendKeyFrameToPlayer($request->connection->getSocket(),$flvPath);
 
+
+            /** 通知网关服务端更新关键帧，同时服务端按路径保存客户端，提高服务端转发数据的效率 */
+            RtmpDemo::$client2ServerData[]= ['client'=>$request->connection->getSocket(),'path'=>$flvPath];
+            /** 然后发送开播命令 */
+            RtmpDemo::startPlay($request->connection->getSocket());
+            /** 然后发送关键帧 */
+            RtmpDemo::sendKeyFrameToPlayer($request->connection->getSocket(),$flvPath);
             return true;
         }
     }

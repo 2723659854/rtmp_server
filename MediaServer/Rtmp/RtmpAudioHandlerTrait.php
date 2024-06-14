@@ -79,6 +79,7 @@ trait RtmpAudioHandlerTrait
                 if ($aacPack->aacPacketType == AACPacket::AAC_PACKET_TYPE_SEQUENCE_HEADER) {
 
                 } else {
+                    /** 更新网关的音频关键帧 */
                     RtmpDemo::changeFrame2ArrayAndSend($audioFrame,$this->publishStreamPath);
                     //音频关键帧缓存
                     /** 缓存音频数据 ，就是丢弃头部，其他音频数据保留，然后再自己分隔数据并下发 */

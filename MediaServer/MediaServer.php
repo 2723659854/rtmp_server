@@ -112,9 +112,15 @@ class MediaServer
     {
         $path = $stream->getPublishPath();
         self::$publishStream[$path] = $stream;
-        /** 只要加入了流，则直接开始推流 */
+        /** 直接开始推流 */
         $stream->on('on_frame', MediaServer::class . '::publisherOnFrame');
         $stream->is_on_frame = true;
+        /**  初始化当前路径没有保存先关关键帧 */
+        self::$hasSendImportantFrame[$path] = false;
+        /** 初始化代理客户端 */
+        RtmpDemo::$flvClientsInfo[$path] = [];
+        /** 初始化每一路直播的解码关键帧 */
+        MediaServer::$metaKeyFrame[$path]=MediaServer::$avcKeyFrame[$path]=MediaServer::$aacKeyFrame[$path] = [];
     }
 
     /**
@@ -198,7 +204,8 @@ class MediaServer
 
     /** 播放之前需要先依次 发送 meta元数据 就是基本参数 发送视频avc数据 发送音频aac数据 发送关键帧*/
 
-    public static bool $hasSendImportantFrame = false;
+    /** 是否已发送关键帧 ，按照路径区分 ，开播的时候初始化为false ，当有新的代理客户端接入的时候，发送关键帧 */
+    public static array $hasSendImportantFrame = [];
 
     public static int $count = 0;
 
@@ -210,8 +217,8 @@ class MediaServer
      */
     static function publisherOnFrame(MediaFrame $frame, PublishStreamInterface $publisher)
     {
-        /** 收集关键帧 */
-        if (self::$hasSendImportantFrame == false) {
+        /** 如果当前路径没有发送关键帧，则收集当前路径的关键帧，并发送给代理客户端 */
+        if (self::$hasSendImportantFrame[$publisher->getPublishPath()] == false) {
             self::addKeyFrame($publisher);
         } else {
             /** 发送了关键帧之后，将数据发送给连接了网关的客户端 ,发送原始数据 */
@@ -230,9 +237,10 @@ class MediaServer
                 ]
             ];
             /** 过滤已发送过的关键帧 */
-            if (!in_array($data,RtmpDemo::$gatewayImportantFrame)){
+            if (!in_array($data, RtmpDemo::$gatewayImportantFrame[$publisher->getPublishPath()])) {
                 $data['important'] = 0;
-                RtmpDemo::$gatewayBuffer[] = $data;
+                /** 按路径分发数据 */
+                RtmpDemo::$gatewayBuffer[$publisher->getPublishPath()][] = $data;
             }
         }
         /** 获取这个媒体路径下的所有播放设备 */
@@ -245,22 +253,25 @@ class MediaServer
         }
     }
 
-    public static $aacKeyFrame = null;
+    public static array $aacKeyFrame = [];
 
-    public static $avcKeyFrame = null;
+    public static array $avcKeyFrame = [];
+
+    public static array $metaKeyFrame = [];
 
     /**
-     * 添加关键帧
+     * 保存关键帧
      * @param PublishStreamInterface $publishStream
+     * @note 此方法只负责保存关键帧
      */
     public static function addKeyFrame(PublishStreamInterface $publishStream)
     {
         /** 将关键帧转发到网关 必须要先发送关键帧，播放器才可以正常播放 */
         $gopCacheQueue = $publishStream->getGopCacheQueue();
         $totalCount = count($gopCacheQueue) + 3;
-        if ($totalCount >= 400) {
+        if ($totalCount >= 500) {
             /** 先清空 */
-            RtmpDemo::$gatewayImportantFrame = [];
+            RtmpDemo::$gatewayImportantFrame[$publishStream->getPublishPath()] = [];
             self::$count = 0;
             /** 缓存所有的关键帧 */
             $array = [];
@@ -271,9 +282,7 @@ class MediaServer
              */
             if ($publishStream->isMetaData()) {
                 $frame = $publishStream->getMetaDataFrame();
-
-                /** 将数据发送给连接了网关的客户端 ,发送原始数据*/
-                $array[] = [
+                $buffer1 = [
                     'cmd' => 'frame',
                     'socket' => null,
                     'data' => [
@@ -286,6 +295,9 @@ class MediaServer
                         'keyCount' => 0
                     ]
                 ];
+                self::$metaKeyFrame[$publishStream->getPublishPath()] = $buffer1;
+                /** 将数据发送给连接了网关的客户端 ,发送原始数据*/
+                $array[] = $buffer1;
                 self::$count++;
 
             }
@@ -297,9 +309,7 @@ class MediaServer
              */
             if ($publishStream->isAVCSequence()) {
                 $frame = $publishStream->getAVCSequenceFrame();
-                self::$avcKeyFrame = $frame;
-                /** 将数据发送给连接了网关的客户端 ,发送原始数据*/
-                $array[] = [
+                $buffer2 = [
                     'cmd' => 'frame',
                     'socket' => null,
                     'data' => [
@@ -312,6 +322,9 @@ class MediaServer
                         'keyCount' => 0
                     ]
                 ];
+                self::$avcKeyFrame[$publishStream->getPublishPath()] = $buffer2;
+                /** 将数据发送给连接了网关的客户端 ,发送原始数据*/
+                $array[] = $buffer2;
                 self::$count++;
             }
 
@@ -323,9 +336,7 @@ class MediaServer
              */
             if ($publishStream->isAACSequence()) {
                 $frame = $publishStream->getAACSequenceFrame();
-                self::$aacKeyFrame = $frame;
-                /** 将数据发送给连接了网关的客户端 ,发送原始数据*/
-                $array[] = [
+                $buffer3 = [
                     'cmd' => 'frame',
                     'socket' => null,
                     'data' => [
@@ -338,6 +349,9 @@ class MediaServer
                         'keyCount' => 0
                     ]
                 ];
+                self::$aacKeyFrame[$publishStream->getPublishPath()] =  $buffer3;
+                /** 将数据发送给连接了网关的客户端 ,发送原始数据*/
+                $array[] = $buffer3;
                 self::$count++;
             }
 
@@ -367,17 +381,20 @@ class MediaServer
             /** 将关键帧的数量写入 */
             foreach ($array as $smallFrame) {
                 $smallFrame['data']['keyCount'] = self::$count;
-                RtmpDemo::$gatewayImportantFrame[] = $smallFrame;
+                /** 需要区分路径 */
+                RtmpDemo::$gatewayImportantFrame[$publishStream->getPublishPath()][] = $smallFrame;
             }
-            /** 确保收集到足够的关键帧，否则经过网关转发后，因为缺少关键帧而无法播放 ，但是也不可以过大，如果过大，会导致内存溢出，经过测试400帧是比较理想的，请不要轻易改动 */
+
+            /** 确保收集到足够的关键帧，否则经过网关转发后，因为缺少关键帧而无法播放 ，但是也不可以过大，如果过大，会导致内存溢出，经过测试500帧是比较理想的，请不要轻易改动 */
             if (self::$count >= 500) {
-                self::$hasSendImportantFrame = true;
+                /** 更新该路径已经发送了关键帧，不要重复发送了 */
+                self::$hasSendImportantFrame[$publishStream->getPublishPath()] = true;
                 var_dump("关键帧存入完毕,一共=" . self::$count . "帧");
-                /** 在这里发送关键帧，确保客户端一定可以接收到关键帧 */
-                foreach (RtmpDemo::$flvClients as $client) {
-                    RtmpDemo::sendKeyFrame($client, RtmpDemo::$gatewayImportantFrame);
-                }
-                var_dump("发送关键帧完毕");
+                var_dump(count(RtmpDemo::$gatewayImportantFrame[$publishStream->getPublishPath()]));
+//                var_dump(RtmpDemo::$flvClients);
+//                foreach (RtmpDemo::$flvClients as $client){
+//                    RtmpDemo::sendKeyFrame($client,RtmpDemo::$gatewayImportantFrame[$publishStream->getPublishPath()]);
+//                }
             }
         }
 
