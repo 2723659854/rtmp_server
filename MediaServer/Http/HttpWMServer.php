@@ -103,21 +103,7 @@ class HttpWMServer
 
         //api
         if ($path === '/api') {
-            $name = $request->get('name');
-            $args = $request->get('args', []);
-            /** 这里应该是请求代理服务器 */
-            //$gatewayClient = RtmpDemo::$flvClient;
-            /** 数据存入缓存 */
-            //RtmpDemo::$writeBuffer[] = ['data'=>['name'=>$name,'args'=>$args,],'cmd'=>'api','socket'=>(int)$connection->getSocket(),'to'=>'server'] ;
-            /** 将消息发送给网关 */
-            //fwrite($gatewayClient,$data,strlen($data));
-            /** 调用媒体服务的接口 */
-            //$data = MediaServer::callApi($name, $args);
-//            if (!is_null($data)) {
-//                $request->connection->send(new Response(200, ['Content-Type' => "application/json"], json_encode($data)));
-//            } else {
-//                $request->connection->send(new Response(404, [], '404 Not Found'));
-//            }
+            /** 转发，不处理其他逻辑 */
             return;
         }
         //flv

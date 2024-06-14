@@ -446,7 +446,6 @@ class RtmpDemo
             }
             /** 保存解码设置 meta，音频和视频各保存一帧 */
             if (in_array($seq, ['aac', 'avc', 'meta'])) {
-                var_dump("接收到解码关键帧", $seq);
                 if (!isset(self::$seqs[$path][$seq])) {
                     self::$seqs[$path][$seq] = $frame;
                 }
@@ -454,55 +453,31 @@ class RtmpDemo
 
             /** 存储所有的音视频帧 （这个方法不合理，当内存耗尽之后，进程会崩溃退出，等后面想个办法再处理） */
             if ($important) {
+                /** 保存连续帧 */
                 self::$importantFrame[$path][] = $frame;
+                /** 保存解码帧 */
                 if ((int)$seq != 4) {
                     self::$seqs[$path][$seq] = $frame;
                 }
             }
-            //self::$importantFrame[$path][] = $frame;
-            /** 给所有客户端发送关键帧 */
-            foreach (self::$playerClients as $client) {
-                /** 必须是客户端 */
-                if (is_resource($client)) {
-                    //self::$client2PlayerData[(int)$client][] = $frame;
-                    /** 必须已经发送了flv头和关键帧，否则浏览器无法解析文件 */
-                    if (isset(self::$hasSendKeyFrame[$path][(int)$client])) {
-                        /** 播放队列所有数据 */
-                        //self::sendFrame2Player($client);
-                        /** 直接发送数据，不使用队列，因为是单进程，担心阻塞问题 */
-                        self::frameSend($frame, $client);
-                    } else {
-                        /** 未发送解码帧，立即发送 */
-                        self::sendKeyFrameToPlayer($client, $path);
+
+            if (isset(self::$playerGroupByPath[$path])){
+                foreach (self::$playerGroupByPath[$path] as $client){
+                    /** 必须是客户端 */
+                    if (is_resource($client)) {
+                        /** 必须已经发送了flv头和关键帧，否则浏览器无法解析文件 */
+                        if (isset(self::$hasSendKeyFrame[$path][(int)$client])) {
+                            /** 直接发送数据，不使用队列，因为是单进程，担心阻塞问题 */
+                            self::frameSend($frame, $client);
+                        } else {
+                            /** 未发送解码帧，立即发送 */
+                            self::sendKeyFrameToPlayer($client, $path);
+                        }
                     }
                 }
             }
         }
     }
-
-    /** 需要推送到播放器的数据 */
-    public static array $client2PlayerData = [];
-
-    /**
-     * 向播放器推送数据
-     * @param $client
-     * @return void
-     * @note 如果某一个客户端暂存了很多数据，会消耗很多时间，导致数据积压，可能需要多进程来处理或者重新设计方法
-     */
-    public static function sendFrame2Player($client)
-    {
-        while (true) {
-            $frame = array_shift(self::$client2PlayerData[(int)$client]);
-            if ($frame) {
-                self::frameSend($frame, $client);
-            } else {
-                break;
-            }
-
-        }
-
-    }
-
 
     /**
      * 检测关键帧，追加到缓存中
@@ -696,10 +671,17 @@ class RtmpDemo
         $buffer = array_shift(self::$client2ServerData);
         if (!empty($buffer)) {
             $path = $buffer['path'];
+            $socket = $buffer['client'];
+            /** 将播放器按资源分组 */
+            self::$playerGroupByPath[$path][] = $socket;
             /** 暂时只是通知服务端需要播放的资源 */
             fwrite($fd, "{$path}\r\n\r\n");
+
         }
     }
+
+    /** 将播放器客户端分组 */
+    public static array $playerGroupByPath = [];
 
     /** 网关服务器读取客户端发送的数据暂存区 */
     public static string $gatewayServerBuffer = '';
