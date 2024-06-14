@@ -120,7 +120,7 @@ class MediaServer
         /** 初始化代理客户端 */
         RtmpDemo::$flvClientsInfo[$path] = [];
         /** 初始化每一路直播的解码关键帧 */
-        MediaServer::$metaKeyFrame[$path]=MediaServer::$avcKeyFrame[$path]=MediaServer::$aacKeyFrame[$path] = [];
+        MediaServer::$metaKeyFrame[$path] = MediaServer::$avcKeyFrame[$path] = MediaServer::$aacKeyFrame[$path] = [];
     }
 
     /**
@@ -217,32 +217,26 @@ class MediaServer
      */
     static function publisherOnFrame(MediaFrame $frame, PublishStreamInterface $publisher)
     {
-        /** 如果当前路径没有发送关键帧，则收集当前路径的关键帧，并发送给代理客户端 */
-        if (self::$hasSendImportantFrame[$publisher->getPublishPath()] == false) {
-            self::addKeyFrame($publisher);
-        } else {
-            /** 发送了关键帧之后，将数据发送给连接了网关的客户端 ,发送原始数据 */
-            //$data = ['cmd' => 'frame', 'socket' => null, 'data' => ['path' => $publisher->getPublishPath(), 'order' => 0, 'frame' => $frame->_buffer, 'timestamp' => $frame->timestamp ?? 0, 'type' => $frame->FRAME_TYPE, 'important' => 1, 'keyCount' => 0]];
-            $data = [
-                'cmd' => 'frame',
-                'socket' => null,
-                'data' => [
-                    'path' => $publisher->getPublishPath(),
-                    'frame' => $frame->_buffer,
-                    'timestamp' => $frame->timestamp ?? 0,
-                    'type' => $frame->FRAME_TYPE,
-                    'important' => 1,
-                    'order' => 4,
-                    'keyCount' => 0
-                ]
-            ];
-            /** 过滤已发送过的关键帧 */
-            if (!in_array($data, RtmpDemo::$gatewayImportantFrame[$publisher->getPublishPath()])) {
-                $data['important'] = 0;
-                /** 按路径分发数据 */
-                RtmpDemo::$gatewayBuffer[$publisher->getPublishPath()][] = $data;
-            }
-        }
+        /** 发送了关键帧之后，将数据发送给连接了网关的客户端 ,发送原始数据 */
+        //$data = ['cmd' => 'frame', 'socket' => null, 'data' => ['path' => $publisher->getPublishPath(), 'order' => 0, 'frame' => $frame->_buffer, 'timestamp' => $frame->timestamp ?? 0, 'type' => $frame->FRAME_TYPE, 'important' => 1, 'keyCount' => 0]];
+        $data = [
+            'cmd' => 'frame',
+            'socket' => null,
+            'data' => [
+                'path' => $publisher->getPublishPath(),
+                'frame' => $frame->_buffer,
+                'timestamp' => $frame->timestamp ?? 0,
+                'type' => $frame->FRAME_TYPE,
+                'important' => 1,
+                'order' => 4,
+                'keyCount' => 0
+            ]
+        ];
+        $data['important'] = 0;
+        /** 所有帧全部转发 */
+        RtmpDemo::$gatewayBuffer[$publisher->getPublishPath()][] = $data;
+
+
         /** 获取这个媒体路径下的所有播放设备 */
         foreach (self::getPlayStreams($publisher->getPublishPath()) as $playStream) {
             /** 如果播放器不是空闲状态 */
@@ -260,129 +254,110 @@ class MediaServer
     public static array $metaKeyFrame = [];
 
     /**
-     * 保存关键帧
-     * @param PublishStreamInterface $publishStream
-     * @note 此方法只负责保存关键帧
+     * 获取关键帧
+     * @param string $path
+     * @return array|void
      */
-    public static function addKeyFrame(PublishStreamInterface $publishStream)
+    public static function getKeyFrame(string $path)
     {
-        /** 将关键帧转发到网关 必须要先发送关键帧，播放器才可以正常播放 */
-        $gopCacheQueue = $publishStream->getGopCacheQueue();
-        $totalCount = count($gopCacheQueue) + 3;
-        if ($totalCount >= 500) {
-            /** 先清空 */
-            RtmpDemo::$gatewayImportantFrame[$publishStream->getPublishPath()] = [];
-            self::$count = 0;
-            /** 缓存所有的关键帧 */
-            $array = [];
-
-            /**
-             * 发送meta元数据 就是基本参数
-             * meta data send
-             */
-            if ($publishStream->isMetaData()) {
-                $frame = $publishStream->getMetaDataFrame();
-                $buffer1 = [
-                    'cmd' => 'frame',
-                    'socket' => null,
-                    'data' => [
-                        'path' => $publishStream->getPublishPath(),
-                        'frame' => $frame->_buffer,
-                        'timestamp' => $frame->timestamp ?? 0,
-                        'type' => $frame->FRAME_TYPE,
-                        'important' => 1,
-                        'order' => 'meta',
-                        'keyCount' => 0
-                    ]
-                ];
-                self::$metaKeyFrame[$publishStream->getPublishPath()] = $buffer1;
-            }
-
-            /**
-             * 发送视频avc数据
-             * avc sequence send
-             * @note 必須發送，否則無法解碼視頻幀
-             */
-            if ($publishStream->isAVCSequence()) {
-                $frame = $publishStream->getAVCSequenceFrame();
-                $buffer2 = [
-                    'cmd' => 'frame',
-                    'socket' => null,
-                    'data' => [
-                        'path' => $publishStream->getPublishPath(),
-                        'frame' => $frame->_buffer,
-                        'timestamp' => $frame->timestamp ?? 0,
-                        'type' => $frame->FRAME_TYPE,
-                        'important' => 1,
-                        'order' => 'avc',
-                        'keyCount' => 0
-                    ]
-                ];
-                self::$avcKeyFrame[$publishStream->getPublishPath()] = $buffer2;
-            }
-
-
-            /**
-             * 发送音频aac数据
-             * aac sequence send
-             * @note 必須發送，否則無法解碼音頻幀
-             */
-            if ($publishStream->isAACSequence()) {
-                $frame = $publishStream->getAACSequenceFrame();
-                $buffer3 = [
-                    'cmd' => 'frame',
-                    'socket' => null,
-                    'data' => [
-                        'path' => $publishStream->getPublishPath(),
-                        'frame' => $frame->_buffer,
-                        'timestamp' => $frame->timestamp ?? 0,
-                        'type' => $frame->FRAME_TYPE,
-                        'important' => 1,
-                        'order' => 'aac',//修改为seq
-                        'keyCount' => 0
-                    ]
-                ];
-                self::$aacKeyFrame[$publishStream->getPublishPath()] =  $buffer3;
-            }
-
-            /**
-             * 发送关键帧
-             * @comment 这个关键帧，存在丢包的情况
-             * //todo 这里存在问题，有时候不能够获取完整的关键帧，导致无法播放
-             */
-            foreach ($gopCacheQueue as $frame) {
-                /** 将数据发送给连接了网关的客户端 ,发送原始数据*/
-                $array[] = [
-                    'cmd' => 'frame',
-                    'socket' => null,
-                    'data' => [
-                        'path' => $publishStream->getPublishPath(),
-                        'frame' => $frame->_buffer,
-                        'timestamp' => $frame->timestamp ?? 0,
-                        'type' => $frame->FRAME_TYPE,
-                        'important' => 1,
-                        'order' => 4,
-                        'keyCount' => 0
-                    ]
-                ];
-                /** 统计包的总数 */
-                self::$count++;
-            }
-            /** 将关键帧的数量写入 */
-            foreach ($array as $smallFrame) {
-                $smallFrame['data']['keyCount'] = self::$count;
-                /** 需要区分路径 */
-                RtmpDemo::$gatewayImportantFrame[$publishStream->getPublishPath()][] = $smallFrame;
-            }
-
-            /** 确保收集到足够的关键帧，否则经过网关转发后，因为缺少关键帧而无法播放 ，但是也不可以过大，如果过大，会导致内存溢出，经过测试500帧是比较理想的，请不要轻易改动 */
-            if (self::$count >= 500) {
-                /** 更新该路径已经发送了关键帧，不要重复发送了 */
-                self::$hasSendImportantFrame[$publishStream->getPublishPath()] = true;
-                var_dump("关键帧存入完毕,一共=" . self::$count . "帧");
-                var_dump(count(RtmpDemo::$gatewayImportantFrame[$publishStream->getPublishPath()]));
-            }
+        if (!self::hasPublishStream($path)) {
+            return [];
         }
+        /** 将关键帧转发到网关 必须要先发送关键帧，播放器才可以正常播放 */
+        $publishStream = self::getPublishStream($path);
+        $gopCacheQueue = $publishStream->getGopCacheQueue();
+        /** 缓存所有的关键帧 */
+        $array = [];
+        /**
+         * 发送meta元数据 就是基本参数
+         * meta data send
+         */
+        if ($publishStream->isMetaData()) {
+            $frame = $publishStream->getMetaDataFrame();
+            self::$metaKeyFrame[$path] = [
+                'cmd' => 'frame',
+                'socket' => null,
+                'data' => [
+                    'path' => $path,
+                    'frame' => $frame->_buffer,
+                    'timestamp' => $frame->timestamp ?? 0,
+                    'type' => $frame->FRAME_TYPE,
+                    'important' => 1,
+                    'order' => 'meta',
+                    'keyCount' => 0
+                ]
+            ];
+        }
+
+        /**
+         * 发送视频avc数据
+         * avc sequence send
+         * @note 必須發送，否則無法解碼視頻幀
+         */
+        if ($publishStream->isAVCSequence()) {
+            $frame = $publishStream->getAVCSequenceFrame();
+            self::$avcKeyFrame[$path] = [
+                'cmd' => 'frame',
+                'socket' => null,
+                'data' => [
+                    'path' => $path,
+                    'frame' => $frame->_buffer,
+                    'timestamp' => $frame->timestamp ?? 0,
+                    'type' => $frame->FRAME_TYPE,
+                    'important' => 1,
+                    'order' => 'avc',
+                    'keyCount' => 0
+                ]
+            ];
+        }
+
+
+        /**
+         * 发送音频aac数据
+         * aac sequence send
+         * @note 必須發送，否則無法解碼音頻幀
+         */
+        if ($publishStream->isAACSequence()) {
+            $frame = $publishStream->getAACSequenceFrame();
+            self::$aacKeyFrame[$path] = [
+                'cmd' => 'frame',
+                'socket' => null,
+                'data' => [
+                    'path' => $path,
+                    'frame' => $frame->_buffer,
+                    'timestamp' => $frame->timestamp ?? 0,
+                    'type' => $frame->FRAME_TYPE,
+                    'important' => 1,
+                    'order' => 'aac',//修改为seq
+                    'keyCount' => 0
+                ]
+            ];
+        }
+
+        /**
+         * 发送关键帧
+         * @comment 这个关键帧，存在丢包的情况
+         * //todo 这里存在问题，有时候不能够获取完整的关键帧，导致无法播放
+         */
+        foreach ($gopCacheQueue as $frame) {
+            /** 将数据发送给连接了网关的客户端 ,发送原始数据*/
+            $array[] = [
+                'cmd' => 'frame',
+                'socket' => null,
+                'data' => [
+                    'path' => $path,
+                    'frame' => $frame->_buffer,
+                    'timestamp' => $frame->timestamp ?? 0,
+                    'type' => $frame->FRAME_TYPE,
+                    'important' => 1,
+                    'order' => 4,
+                    'keyCount' => 0
+                ]
+            ];
+        }
+        var_dump(count($array));
+        return $array;
+
 
     }
 

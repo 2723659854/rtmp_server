@@ -81,7 +81,7 @@ trait RtmpVideoHandlerTrait
                         $avcPack->avcPacketType === AVCPacket::AVC_PACKET_TYPE_NALU) {
                         $this->gopCacheQueue = [];
                         /** 清理代理网关缓存 */
-                        RtmpDemo::$gatewayImportantFrame[$this->publishStreamPath] =[];
+                        //RtmpDemo::$gatewayImportantFrame[$this->publishStreamPath] =[];
                     }
 
                     /** 传递JPEG编码，同时传递包的详细信息（帧率，分辨率等） */
@@ -91,7 +91,7 @@ trait RtmpVideoHandlerTrait
                         //skip avc sequence
                     } else {
                         /** 更新网关的视频关键帧 */
-                        RtmpDemo::changeFrame2ArrayAndSend($videoFrame,$this->publishStreamPath);
+                        //RtmpDemo::changeFrame2ArrayAndSend($videoFrame,$this->publishStreamPath);
                         /** 将包投递到队列中 */
                         $this->gopCacheQueue[] = $videoFrame;
                     }
