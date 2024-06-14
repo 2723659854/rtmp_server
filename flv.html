@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <meta name=viewport content="width=device-width,initial-scale=1,maximum-scale=1,minimum-scale=1,user-scalable=no,minimal-ui">
+    <meta name="referrer" content="no-referrer">
+    <title>flv.js播放</title>
+
+    <script src="./flv.js"></script>
+</head>
+<body>
+
+<video id="my-player" preload="auto" muted autoplay type="rtmp/flv">
+    <source src="">
+</video>
+
+<script>
+    videoElement = document.getElementById('my-player');
+    if (flvjs.isSupported()) {
+        flvPlayer = flvjs.createPlayer({
+            type: 'flv',					//媒体类型
+            url: 'http://127.0.0.1:8504/a/b.flv',//flv格式媒体URL
+            isLive: true,					//数据源是否为直播流
+            hasAudio: false,				//数据源是否包含有音频
+            hasVideo: true,					//数据源是否包含有视频
+            enableStashBuffer: false		//是否启用缓存区
+        },{
+            enableWorker: false, 			//不启用分离线程
+            enableStashBuffer: false, 		//关闭IO隐藏缓冲区
+            autoCleanupSourceBuffer: true 	//自动清除缓存
+        });
+        flvPlayer.attachMediaElement(videoElement);	//将播放实例注册到节点
+        flvPlayer.load(); 					//加载数据流
+        flvPlayer.play();					//播放数据流
+    }
+</script>
+
+</body>
+</html>

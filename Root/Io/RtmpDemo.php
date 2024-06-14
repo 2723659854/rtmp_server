@@ -464,11 +464,12 @@ class RtmpDemo
             foreach (self::$playerClients as $client) {
                 /** 必须是客户端 */
                 if (is_resource($client)) {
-                    self::$client2PlayerData[(int)$client][] = $frame;
+                    //self::$client2PlayerData[(int)$client][] = $frame;
                     /** 必须已经发送了flv头和关键帧，否则浏览器无法解析文件 */
                     if (isset(self::$hasSendKeyFrame[$path][(int)$client])) {
                         /** 播放队列所有数据 */
                         //self::sendFrame2Player($client);
+                        /** 直接发送数据，不使用队列，因为是单进程，担心阻塞问题 */
                         self::frameSend($frame, $client);
                     } else {
                         /** 未发送解码帧，立即发送 */

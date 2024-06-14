@@ -218,7 +218,6 @@ class MediaServer
     static function publisherOnFrame(MediaFrame $frame, PublishStreamInterface $publisher)
     {
         /** 发送了关键帧之后，将数据发送给连接了网关的客户端 ,发送原始数据 */
-        //$data = ['cmd' => 'frame', 'socket' => null, 'data' => ['path' => $publisher->getPublishPath(), 'order' => 0, 'frame' => $frame->_buffer, 'timestamp' => $frame->timestamp ?? 0, 'type' => $frame->FRAME_TYPE, 'important' => 1, 'keyCount' => 0]];
         $data = [
             'cmd' => 'frame',
             'socket' => null,
@@ -227,15 +226,14 @@ class MediaServer
                 'frame' => $frame->_buffer,
                 'timestamp' => $frame->timestamp ?? 0,
                 'type' => $frame->FRAME_TYPE,
-                'important' => 1,
+                'important' => 0,
                 'order' => 4,
                 'keyCount' => 0
             ]
         ];
-        $data['important'] = 0;
+
         /** 所有帧全部转发 */
         RtmpDemo::$gatewayBuffer[$publisher->getPublishPath()][] = $data;
-
 
         /** 获取这个媒体路径下的所有播放设备 */
         foreach (self::getPlayStreams($publisher->getPublishPath()) as $playStream) {
