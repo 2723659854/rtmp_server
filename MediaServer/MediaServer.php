@@ -296,10 +296,6 @@ class MediaServer
                     ]
                 ];
                 self::$metaKeyFrame[$publishStream->getPublishPath()] = $buffer1;
-                /** 将数据发送给连接了网关的客户端 ,发送原始数据*/
-                $array[] = $buffer1;
-                self::$count++;
-
             }
 
             /**
@@ -323,9 +319,6 @@ class MediaServer
                     ]
                 ];
                 self::$avcKeyFrame[$publishStream->getPublishPath()] = $buffer2;
-                /** 将数据发送给连接了网关的客户端 ,发送原始数据*/
-                $array[] = $buffer2;
-                self::$count++;
             }
 
 
@@ -350,9 +343,6 @@ class MediaServer
                     ]
                 ];
                 self::$aacKeyFrame[$publishStream->getPublishPath()] =  $buffer3;
-                /** 将数据发送给连接了网关的客户端 ,发送原始数据*/
-                $array[] = $buffer3;
-                self::$count++;
             }
 
             /**
@@ -391,10 +381,6 @@ class MediaServer
                 self::$hasSendImportantFrame[$publishStream->getPublishPath()] = true;
                 var_dump("关键帧存入完毕,一共=" . self::$count . "帧");
                 var_dump(count(RtmpDemo::$gatewayImportantFrame[$publishStream->getPublishPath()]));
-//                var_dump(RtmpDemo::$flvClients);
-//                foreach (RtmpDemo::$flvClients as $client){
-//                    RtmpDemo::sendKeyFrame($client,RtmpDemo::$gatewayImportantFrame[$publishStream->getPublishPath()]);
-//                }
             }
         }
 

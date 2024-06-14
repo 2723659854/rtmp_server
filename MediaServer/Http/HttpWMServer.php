@@ -319,48 +319,11 @@ class HttpWMServer
             /** 通知网关服务端更新关键帧，同时服务端按路径保存客户端，提高服务端转发数据的效率 */
             RtmpDemo::$client2ServerData[]= ['client'=>$request->connection->getSocket(),'path'=>$flvPath];
             /** 然后发送开播命令 */
-            RtmpDemo::startPlay($request->connection->getSocket());
-            /** 然后发送关键帧 */
+            //RtmpDemo::startPlay($request->connection->getSocket());
+            /** 然后发送关键帧 可能这个时候没有关键帧，*/
             RtmpDemo::sendKeyFrameToPlayer($request->connection->getSocket(),$flvPath);
+
             return true;
-        }
-    }
-
-    /**
-     * 播放flv资源
-     * @param Request $request
-     * @param $flvPath
-     * @return void
-     * @comment 是这里实现flv播放的 和mediaServer产生关系的
-     */
-    public function playMediaStreamGateway(Request $request, $flvPath)
-    {
-        /** 检查是否已经有发布这个流媒体 */
-        //check stream
-        if (MediaServer::hasPublishStream($flvPath)) {
-            $p_stream = MediaServer::getPublishStream($flvPath);
-            if (!$p_stream->is_on_frame) {
-                /** 这一路流媒体资源开始推流 转发流量数据 */
-                $p_stream->on('on_frame', MediaServer::class.'::publisherOnFrame');
-                $p_stream->is_on_frame = true;
-            }
-            FlvPlayStream::startPlay2($request,$flvPath);
-        } else {
-            /** 没有这一路推流资源 直接关闭链接或者发送404 */
-            logger()->warning("Stream {path} not found", ['path' => $flvPath]);
-            if ($request->connection->protocol === Websocket::class) {
-                $request->connection->close();
-            } else {
-                /** 如果没有这个媒体资源，返回404，js一共会请求6次，若都是404，之后不会再自动发起请求 */
-                $request->connection->send(
-                    new Response(
-                        404,
-                        ['Content-Type' => 'text/plain','Access-Control-Allow-Origin' => '*',],
-                        "Stream not found."
-                    )
-                );
-            }
-
         }
     }
 
