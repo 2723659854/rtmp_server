@@ -62,8 +62,6 @@ class HttpWMServer
 
         /** 这里做特殊处理 ，判断这个客户端是否是链接的代理服务器，如果是，那么使用代理客户端请求服务端 */
         if (isset(RtmpDemo::$playerClients[(int)$connection->getSocket()])){
-
-            var_dump("代理请求");
             /** 请求代理服务器 */
             switch ($request->method()) {
                 case "GET":
@@ -75,7 +73,6 @@ class HttpWMServer
                     return $connection->send(new Response(405));
             }
         }else{
-            var_dump("正常请求");
             /** 请求主服务器 */
             switch ($request->method()) {
                 case "GET":

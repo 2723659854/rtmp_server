@@ -245,18 +245,20 @@ class MediaServer
         }
     }
 
+    /** 音频解码帧 */
     public static array $aacKeyFrame = [];
-
+    /** 视频解码帧 */
     public static array $avcKeyFrame = [];
-
+    /** 媒体控制数据帧 */
     public static array $metaKeyFrame = [];
 
     /**
      * 获取关键帧
      * @param string $path
-     * @return array|void
+     * @return array
+     * @note 这里存在一个问题，为了正常播放，目前所有的播放器获取解码关键帧都是请求的主服务器，不知道当客户端达到一定数量级后，推流主服务会不会挂。
      */
-    public static function getKeyFrame(string $path)
+    public static function getKeyFrame(string $path):array
     {
         if (!self::hasPublishStream($path)) {
             return [];
@@ -290,7 +292,7 @@ class MediaServer
         /**
          * 发送视频avc数据
          * avc sequence send
-         * @note 必須發送，否則無法解碼視頻幀
+         * @note 必須發送，否則無法解碼視頻
          */
         if ($publishStream->isAVCSequence()) {
             $frame = $publishStream->getAVCSequenceFrame();
@@ -313,7 +315,7 @@ class MediaServer
         /**
          * 发送音频aac数据
          * aac sequence send
-         * @note 必須發送，否則無法解碼音頻幀
+         * @note 必須發送，否則無法解碼音幀
          */
         if ($publishStream->isAACSequence()) {
             $frame = $publishStream->getAACSequenceFrame();
@@ -334,8 +336,8 @@ class MediaServer
 
         /**
          * 发送关键帧
-         * @comment 这个关键帧，存在丢包的情况
-         * //todo 这里存在问题，有时候不能够获取完整的关键帧，导致无法播放
+         * @comment 这个关键帧，就是首张画面，直播的后续画面是基于首张画面渲染的。
+         * @note 这里面全是I帧，不可缺少，否则播放器不知道怎么渲染图像
          */
         foreach ($gopCacheQueue as $frame) {
             /** 将数据发送给连接了网关的客户端 ,发送原始数据*/
@@ -353,10 +355,7 @@ class MediaServer
                 ]
             ];
         }
-        var_dump(count($array));
         return $array;
-
-
     }
 
 
@@ -410,7 +409,6 @@ class MediaServer
 
         logger()->info(" add publisher {path}", ['path' => $path]);
 
-        //TODO 生成m3u8索引文件
         return true;
 
     }

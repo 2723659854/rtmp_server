@@ -830,10 +830,6 @@ class RtmpDemo
                         $count = $buffer['data']['keyCount'];
                         $seq = $buffer['data']['order'];
 
-                        if (in_array($seq, ['aac', 'avc', 'meta'])) {
-                            var_dump($seq);
-                        }
-
                         /** 使用http之类的文本分隔符 ，一整个报文之间用换行符分割  */
                         $string = $type . "\r\n" . $timestamp . "\r\n" . $important . "\r\n" . $count . "\r\n" . $path . "\r\n" . $seq . "\r\n" . $data . "\r\n\r\n";
                         /** 他么的这数据也太长了，将数据切片发送 */
@@ -904,7 +900,11 @@ class RtmpDemo
         if (isset(self::$importantFrame[$path]) && isset(self::$seqs[$path]) && count(self::$seqs[$path]) == 3) {
             /** 发送开播命令 */
             RtmpDemo::startPlay($client);
-            /** 先发送解码的关键帧 */
+            /** 先发第一次解码帧，要求播放器解码 */
+            self::frameSend(self::$seqs[$path]['meta'], $client);
+            self::frameSend(self::$seqs[$path]['avc'], $client);
+            self::frameSend(self::$seqs[$path]['aac'], $client);
+            /** 防止播放器无法解码，发送两次解码帧 */
             self::frameSend(self::$seqs[$path]['meta'], $client);
             self::frameSend(self::$seqs[$path]['avc'], $client);
             self::frameSend(self::$seqs[$path]['aac'], $client);
@@ -917,10 +917,11 @@ class RtmpDemo
                 self::$importantFrame[$path] = array_slice(self::$importantFrame[$path], $count - self::$playKeyFrameLimit, self::$playKeyFrameLimit);
             }
 
+            /** 发送关键帧给播放器 */
             foreach (self::$importantFrame[$path] as $frame) {
                 self::frameSend($frame, $client);
             }
-
+            /** 标记播放器已初始化，可以正常推流了 */
             self::$hasSendKeyFrame[$path][(int)$client] = 1;
             var_dump("发送关键帧完成" . count(self::$importantFrame[$path]));
         } else {
@@ -934,6 +935,7 @@ class RtmpDemo
     /** 播放器客户端 */
     public static array $playerClients = [];
 
+    /** 保存网关客户端的链接 */
     public static array $clientTcpConnections = [];
 
     /**
