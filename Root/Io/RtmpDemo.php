@@ -409,6 +409,9 @@ class RtmpDemo
     /** 解码用的三个关键帧 */
     public static array $seqs = [];
 
+    /** 开播所需I帧总数 */
+    public static array $gopFrameCount = [];
+
     /**
      * 这里是flv客户端向播放器推送数据
      * @param $fd
@@ -431,6 +434,7 @@ class RtmpDemo
             $type = ($array[0]);
             $timestamp = ($array[1]);
             $important = $array[2];
+            /** I帧总数，开播解码需要用 */
             $count = $array[3];
             $path = $array[4];
             $seq = $array[5];
@@ -452,6 +456,7 @@ class RtmpDemo
                 /** 保存解码帧 ，此时服务端发送的解码帧是meta,avc,aac */
                 if ((int)$seq != 4) {
                     self::$seqs[$path][$seq] = $frame;
+                    self::$gopFrameCount[$path] = $count;
                     /** 因为服务端首先发送关键帧，然后再发I帧，所以此时需要清空当前路径的连续帧，清理旧关键帧，同时防止内存泄漏 */
                     self::$importantFrame[$path] = [];
                     /** 避免重复发送解码帧 */
@@ -632,7 +637,6 @@ class RtmpDemo
     public static array $client2ServerData = [];
 
 
-
     /** 将播放器客户端分组 */
     public static array $playerGroupByPath = [];
 
@@ -708,26 +712,26 @@ class RtmpDemo
         /** 立刻清空重新接收数据，防止时间差掉帧 */
         self::$gatewayBuffer[(int)$fd] = [];
         foreach ($array as $path => $buffer) {
-                if ($buffer['cmd'] == 'frame') {
-                    /** 保持数据的原始性，尽量不添加其他数据 */
-                    $type = $buffer['data']['type'];
-                    $timestamp = $buffer['data']['timestamp'];
-                    $data = $buffer['data']['frame'];
-                    $important = $buffer['data']['important'];
-                    $path = $buffer['data']['path'];
-                    $count = $buffer['data']['keyCount'];
-                    $seq = $buffer['data']['order'];
-                    /** 使用http之类的文本分隔符 ，一整个报文之间用换行符分割 */
-                    $string = $type . "\r\n" . $timestamp . "\r\n" . $important . "\r\n0\r\n" . $path . "\r\n" . $seq . "\r\n" . $data . "\r\n\r\n";
+            if ($buffer['cmd'] == 'frame') {
+                /** 保持数据的原始性，尽量不添加其他数据 */
+                $type = $buffer['data']['type'];
+                $timestamp = $buffer['data']['timestamp'];
+                $data = $buffer['data']['frame'];
+                $important = $buffer['data']['important'];
+                $path = $buffer['data']['path'];
+                $count = $buffer['data']['keyCount'];
+                $seq = $buffer['data']['order'];
+                /** 使用http之类的文本分隔符 ，一整个报文之间用换行符分割 */
+                $string = $type . "\r\n" . $timestamp . "\r\n" . $important . "\r\n0\r\n" . $path . "\r\n" . $seq . "\r\n" . $data . "\r\n\r\n";
 
-                    /** 他么的这数据也太长了，将数据切片发送 */
-                    $stringArray = self::splitString($string, 1024);
-                    if (is_resource($fd)) {
-                        foreach ($stringArray as $item) {
-                            fwrite($fd, $item);
-                        }
+                /** 他么的这数据也太长了，将数据切片发送 */
+                $stringArray = self::splitString($string, 1024);
+                if (is_resource($fd)) {
+                    foreach ($stringArray as $item) {
+                        fwrite($fd, $item);
                     }
                 }
+            }
         }
 
     }
@@ -755,7 +759,7 @@ class RtmpDemo
                 /** 直接从服务端获取关键帧 */
                 $keyFrame = MediaServer::getKeyFrame($path) ?? [];
                 $decodeFrame = [MediaServer::$metaKeyFrame[$path] ?? [], MediaServer::$avcKeyFrame[$path] ?? [], MediaServer::$aacKeyFrame[$path] ?? []];
-                /** 将数据交给gateWayWrite() 处理 */
+                /** 将数据交给select 处理 */
                 self::$server2ClientsData[(int)$fd][] = $decodeFrame;
                 self::$server2ClientsData[(int)$fd][] = $keyFrame;
             }
@@ -775,7 +779,13 @@ class RtmpDemo
      */
     public static function sendKeyFrameToPlayer($client, $path)
     {
-        if (isset(self::$importantFrame[$path]) && isset(self::$seqs[$path]) && count(self::$seqs[$path]) == 3) {
+        if (
+            isset(self::$importantFrame[$path])
+            && isset(self::$gopFrameCount[$path])
+            && (count(self::$importantFrame[$path]) == self::$gopFrameCount[$path])
+            && isset(self::$seqs[$path])
+            && count(self::$seqs[$path]) == 3
+        ) {
             /** 发送开播命令 */
             self::startPlay($client);
             var_dump("发送开播命令完成");
@@ -784,14 +794,7 @@ class RtmpDemo
             self::frameSend(self::$seqs[$path]['avc'], $client);
             self::frameSend(self::$seqs[$path]['aac'], $client);
             var_dump("发送解码命令完成" . count(self::$seqs[$path]));
-            /** 再发送I帧 */
-            $count = count(self::$importantFrame[$path]);
-            /** 只发送最近的self::$playKeyFrameLimit帧 ，并且更新关键帧，防止内存溢出，同时保证有足够的关键帧解码 */
-//            if ($count > self::$playKeyFrameLimit) {
-//                self::$importantFrame[$path] = array_slice(self::$importantFrame[$path], $count - self::$playKeyFrameLimit, self::$playKeyFrameLimit);
-//            }
-
-            /** 发送关键帧给播放器 */
+            /** 发送关键帧I帧给播放器 ，不限定关键帧的数量，有一个就直接*/
             foreach (self::$importantFrame[$path] as $frame) {
                 self::frameSend($frame, $client);
             }

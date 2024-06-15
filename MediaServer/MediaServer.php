@@ -277,7 +277,10 @@ class MediaServer
         }
         /** 将关键帧转发到网关 必须要先发送关键帧，播放器才可以正常播放 */
         $publishStream = self::getPublishStream($path);
+        /** 当前所有的I帧 */
         $gopCacheQueue = $publishStream->getGopCacheQueue();
+        /** 当前I帧总数 */
+        $keyCount = count($gopCacheQueue);
         /** 缓存所有的关键帧 */
         $array = [];
         /**
@@ -296,7 +299,7 @@ class MediaServer
                     'type' => $frame->FRAME_TYPE,
                     'important' => 1,
                     'order' => 'meta',
-                    'keyCount' => 0
+                    'keyCount' => $keyCount
                 ]
             ];
         }
@@ -318,7 +321,7 @@ class MediaServer
                     'type' => $frame->FRAME_TYPE,
                     'important' => 1,
                     'order' => 'avc',
-                    'keyCount' => 0
+                    'keyCount' => $keyCount
                 ]
             ];
         }
@@ -341,7 +344,7 @@ class MediaServer
                     'type' => $frame->FRAME_TYPE,
                     'important' => 1,
                     'order' => 'aac',//修改为seq
-                    'keyCount' => 0
+                    'keyCount' => $keyCount
                 ]
             ];
         }
@@ -351,6 +354,7 @@ class MediaServer
          * @comment 这个关键帧，就是首张画面，直播的后续画面是基于首张画面渲染的。
          * @note 这里面全是I帧，不可缺少，否则播放器不知道怎么渲染图像
          */
+
         foreach ($gopCacheQueue as $frame) {
             /** 将数据发送给连接了网关的客户端 ,发送原始数据*/
             $array[] = [
