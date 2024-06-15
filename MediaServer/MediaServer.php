@@ -232,8 +232,20 @@ class MediaServer
             ]
         ];
 
-        /** 所有帧全部转发 */
-        RtmpDemo::$gatewayBuffer[$publisher->getPublishPath()][] = $data;
+        /** 给每一个在线的客户端都分发数据，数据隔离，相互不影响，同时防止内存泄漏 */
+        if (isset(RtmpDemo::$flvClientsInfo[$publisher->getPublishPath()])){
+            foreach (RtmpDemo::$flvClientsInfo[$publisher->getPublishPath()] as $index => $client){
+                if (!is_resource($client)){
+                    /** 清理客户端缓存 */
+                    unset(RtmpDemo::$gatewayBuffer[$index]);
+                    /** 清理客户端 */
+                    unset(RtmpDemo::$flvClientsInfo[$publisher->getPublishPath()][$index]);
+                    break;
+                }
+                /** 所有帧全部转发 */
+                RtmpDemo::$gatewayBuffer[$index][] = $data;
+            }
+        }
 
         /** 获取这个媒体路径下的所有播放设备 */
         foreach (self::getPlayStreams($publisher->getPublishPath()) as $playStream) {

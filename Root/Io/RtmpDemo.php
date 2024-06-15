@@ -435,6 +435,8 @@ class RtmpDemo
             $path = $array[4];
             $seq = $array[5];
             $frame = $array[6];
+            /** 因为转发有延迟，所以使用新的时间戳 */
+            //$timestamp = timestamp();
             //$string = $type . "\r\n" . $timestamp . "\r\n" . $important . "\r\n" . $count . "\r\n" . $path . "\r\n" . $seq . "\r\n" . $frame . "\r\n\r\n";
             /** 目前播放器可以拉流，缓冲数据，无法播放，不知道是什么原因 */
             if ($type == MediaFrame::VIDEO_FRAME) {
@@ -444,25 +446,27 @@ class RtmpDemo
             } else {
                 $frame = new MetaDataFrame($frame);
             }
-            /** 保存解码设置 meta，音频和视频各保存一帧 */
-            if (in_array($seq, ['aac', 'avc', 'meta'])) {
-                if (!isset(self::$seqs[$path][$seq])) {
-                    self::$seqs[$path][$seq] = $frame;
-                }
-            }
 
             /** 存储所有的音视频帧 （这个方法不合理，当内存耗尽之后，进程会崩溃退出，等后面想个办法再处理） */
             if ($important) {
-                /** 保存连续帧 */
-                self::$importantFrame[$path][] = $frame;
-                /** 保存解码帧 */
+                /** 保存解码帧 ，此时服务端发送的解码帧是meta,avc,aac */
                 if ((int)$seq != 4) {
                     self::$seqs[$path][$seq] = $frame;
+                    /** 因为服务端首先发送关键帧，然后再发I帧，所以此时需要清空当前路径的连续帧，清理旧关键帧，同时防止内存泄漏 */
+                    self::$importantFrame[$path] = [];
+                    /** 避免重复发送解码帧 */
+                    return;
+                } else {
+                    /** 保存连续帧 */
+                    self::$importantFrame[$path][] = $frame;
                 }
             }
 
-            if (isset(self::$playerGroupByPath[$path])){
-                foreach (self::$playerGroupByPath[$path] as $client){
+            /** 如果客户端多次断开 ，服务端无法给客户端发送数据 */
+            //var_dump($timestamp.'...');
+
+            if (isset(self::$playerGroupByPath[$path])) {
+                foreach (self::$playerGroupByPath[$path] as $index => $client) {
                     /** 必须是客户端 */
                     if (is_resource($client)) {
                         /** 必须已经发送了flv头和关键帧，否则浏览器无法解析文件 */
@@ -473,6 +477,8 @@ class RtmpDemo
                             /** 未发送解码帧，立即发送 */
                             self::sendKeyFrameToPlayer($client, $path);
                         }
+                    } else {
+                        unset(self::$playerGroupByPath[$path][$index]);
                     }
                 }
             }
@@ -480,61 +486,27 @@ class RtmpDemo
     }
 
     /**
-     * 检测关键帧，追加到缓存中
-     * @param MediaFrame $frame
-     * @return void
-     * @comment 方法有效，但是当推流开始后，将不会再发送关键帧，所以暂时用不上
+     * 客户端向网关发送数据
+     * @param resource $fd 网关服务器的链接
+     * @comment 法相服务端一直可读，会一直发送数据，这里要判断，只有当有数据的时候才发送，不然对面服务器要崩溃
      */
-    public static function addKeyFrame(MediaFrame $frame, string $path)
+    public function flvWrite($fd)
     {
-        /** 将音频帧的关键帧加入到队列 */
-        if ($frame->FRAME_TYPE == MediaFrame::AUDIO_FRAME) {
-            $aacPack = $frame->getAACPacket();
-            $isAACSequence = false;
-            if ($aacPack->aacPacketType === AACPacket::AAC_PACKET_TYPE_SEQUENCE_HEADER) {
-                $isAACSequence = true;
-            }
-
-            if ($isAACSequence) {
-
-                if ($aacPack->aacPacketType == AACPacket::AAC_PACKET_TYPE_SEQUENCE_HEADER) {
-
-                } else {
-                    var_dump("收到音频关键帧");
-                    //音频关键帧缓存
-                    /** 保存音频关键帧 */
-                    self::$importantFrame[$path][] = $frame;
-                }
-            }
-        }
-
-        if ($frame->FRAME_TYPE == MediaFrame::VIDEO_FRAME) {
-            $avcPack = $frame->getAVCPacket();
-            $isAVCSequence = false;
-            //read avc
-            /** 元数据 描述信息 */
-            if ($avcPack->avcPacketType === AVCPacket::AVC_PACKET_TYPE_SEQUENCE_HEADER) {
-                $isAVCSequence = true;
-            }
-
-            if ($isAVCSequence) {
-
-                /** 保存视频帧 */
-                if ($frame->frameType === VideoFrame::VIDEO_FRAME_TYPE_KEY_FRAME
-                    &&
-                    $avcPack->avcPacketType === AVCPacket::AVC_PACKET_TYPE_SEQUENCE_HEADER) {
-                    //skip avc sequence
-                } else {
-                    /** 保存视频关键帧 */
-                    self::$importantFrame[$path][] = $frame;
-                    var_dump("收到视频关键帧");
-                }
+        /** 一次行将数据全部发送给服务端 */
+        $array = self::$client2ServerData;
+        self::$client2ServerData = [];
+        foreach ($array as $buffer) {
+            if (!empty($buffer)) {
+                $path = $buffer['path'];
+                $socket = $buffer['client'];
+                /** 将播放器按资源分组 */
+                self::$playerGroupByPath[$path][] = $socket;
+                /** 暂时只是通知服务端需要播放的资源 */
+                fwrite($fd, "{$path}\r\n\r\n");
             }
         }
     }
 
-    /** 客户端是否已经发送了关键帧 */
-    public static array $clientHasSendKeyFrame = [];
 
     /**
      * 发送数据到客户端
@@ -606,7 +578,6 @@ class RtmpDemo
         self::write($flvHeader, $client);
         /** 发送完关键帧结束，才可以发送普通帧 */
         self::$hasStartPlay[(int)$client] = 1;
-        var_dump("发送开播命令完成");
     }
 
     /**
@@ -637,7 +608,7 @@ class RtmpDemo
             $string = \dechex(\strlen($data)) . "\r\n$data\r\n";
         }
         /** 不切片，直接发送，因为我怀疑如果切片，会导致浏览器拉去数据失败，掉帧，播放失败 */
-        @fwrite($client, $string);
+        fwrite($client, $string);
     }
 
 
@@ -660,61 +631,13 @@ class RtmpDemo
     /** 客户端需要发送给服务端的数据队列 */
     public static array $client2ServerData = [];
 
-    /**
-     * 客户端向网关发送数据
-     * @param resource $fd 网关服务器的链接
-     * @comment 法相服务端一直可读，会一直发送数据，这里要判断，只有当有数据的时候才发送，不然对面服务器要崩溃
-     */
-    public function flvWrite($fd)
-    {
-        /** 一次发送一条命令，防止阻塞服务 */
-        $buffer = array_shift(self::$client2ServerData);
-        if (!empty($buffer)) {
-            $path = $buffer['path'];
-            $socket = $buffer['client'];
-            /** 将播放器按资源分组 */
-            self::$playerGroupByPath[$path][] = $socket;
-            /** 暂时只是通知服务端需要播放的资源 */
-            fwrite($fd, "{$path}\r\n\r\n");
 
-        }
-    }
 
     /** 将播放器客户端分组 */
     public static array $playerGroupByPath = [];
 
     /** 网关服务器读取客户端发送的数据暂存区 */
     public static string $gatewayServerBuffer = '';
-
-    /**
-     * 网关监测客户端可读事件
-     * @param $fd
-     * @comment 这里是主服务器
-     */
-    public function gatewayRead($fd)
-    {
-        if (is_resource($fd)) {
-            $buffer = fread($fd, 15);
-            self::$gatewayServerBuffer .= $buffer;
-            if ($pos = strpos(self::$gatewayServerBuffer, "\r\n\r\n")) {
-                /** 获取完整的内容 */
-                $content = substr(self::$gatewayServerBuffer, 0, $pos + 4);
-                /** 更新暂存区 */
-                self::$gatewayServerBuffer = substr(self::$gatewayServerBuffer, $pos + 4);
-                /** 暂时只传递了path ,后期可能会传递其他数据 */
-                $array = explode("\r\n", $content);
-                $path = $array[0];
-                /** 按照路径将客户端分开保存 */
-                RtmpDemo::$flvClientsInfo[$path][] = $fd;
-                /** 直接从服务端获取关键帧 */
-                $keyFrame = MediaServer::getKeyFrame($path)??[];
-                $decodeFrame = [MediaServer::$metaKeyFrame[$path] ?? [], MediaServer::$avcKeyFrame[$path] ?? [], MediaServer::$aacKeyFrame[$path] ?? []];
-                /** 将数据交给gateWayWrite() 处理 */
-                self::$server2ClientsData[(int)$fd][] = $decodeFrame;
-                self::$server2ClientsData[(int)$fd][] = $keyFrame;
-            }
-        }
-    }
 
     /** 网关服务端需要发送给客户端的数据 */
     public static array $server2ClientsData = [];
@@ -738,73 +661,6 @@ class RtmpDemo
 
 
     /**
-     * 发送关键帧
-     * @param $fd
-     * @param $array
-     */
-    public static function sendKeyFrame($fd, $array)
-    {
-
-        foreach ($array as $buffer) {
-            if (empty($buffer)) {
-                break;
-            }
-            if ($buffer['cmd'] == 'frame') {
-                /** 保持数据的原始性，尽量不添加其他数据 */
-                $type = $buffer['data']['type'];
-                $timestamp = $buffer['data']['timestamp'];
-                $data = $buffer['data']['frame'];
-                $important = $buffer['data']['important'];
-                $path = $buffer['data']['path'];
-                $count = $buffer['data']['keyCount'];
-                $seq = $buffer['data']['order'];
-                if (in_array($seq, ['aac', 'avc', 'meta'])) {
-                    var_dump($seq);
-                }
-                /** 使用http之类的文本分隔符 ，一整个报文之间用换行符分割 ，这个鸡儿协议真难搞 */
-                $string = $type . "\r\n" . $timestamp . "\r\n" . $important . "\r\n" . $count . "\r\n" . $path . "\r\n" . $seq . "\r\n" . $data . "\r\n\r\n";
-                /** 他么的这数据也太长了，将数据切片发送 */
-                $stringArray = self::splitString($string, 1024);
-                if (is_resource($fd)) {
-                    foreach ($stringArray as $item) {
-                        @fwrite($fd, $item);
-                    }
-                }
-            }
-        }
-        var_dump("发送关键帧完成");
-    }
-
-
-    /**
-     * 发送关键帧
-     * @param MediaFrame $frame
-     * @param string $path
-     * @return void
-     */
-    public static function changeFrame2ArrayAndSend(MediaFrame $frame, string $path)
-    {
-        $newFrame = [
-            'cmd' => 'frame',
-            'socket' => null,
-            'data' => [
-                'path' => $path,
-                'frame' => $frame->_buffer,
-                'timestamp' => $frame->timestamp ?? 0,
-                'type' => $frame->FRAME_TYPE,
-                'important' => 1,
-                'order' => 4,
-                'keyCount' => 0
-            ]
-        ];
-
-        /** 发送 */
-        //RtmpDemo::$gatewayBuffer[$path][] = $newFrame;
-        /** 更新关键帧 I帧 P帧 */
-        //RtmpDemo::$gatewayImportantFrame[$path][] = $newFrame;
-    }
-
-    /**
      * 网关监测客户端可写事件
      * @param $fd
      * @comment 这里是服务器发送给客户端
@@ -814,10 +670,13 @@ class RtmpDemo
     {
         /** 需要优先发送的关键帧 */
         if (isset(self::$server2ClientsData[(int)$fd]) && !empty(self::$server2ClientsData[(int)$fd])) {
-            foreach (self::$server2ClientsData[(int)$fd] as $buffers) {
-
+            /** 发送完成后，清空，否则一直发送关键帧，无法播放 */
+            $myKeyFrameData = self::$server2ClientsData[(int)$fd];
+            /** 立刻清空，防止因为时间差掉帧 */
+            unset(self::$server2ClientsData[(int)$fd]);
+            foreach ($myKeyFrameData as $buffers) {
                 foreach ($buffers as $buffer) {
-                    if (empty($buffer)){
+                    if (empty($buffer)) {
                         break;
                     }
                     if ($buffer['cmd'] == 'frame') {
@@ -836,24 +695,19 @@ class RtmpDemo
                         $stringArray = self::splitString($string, 1024);
                         if (is_resource($fd)) {
                             foreach ($stringArray as $item) {
-                                @fwrite($fd, $item);
+                                fwrite($fd, $item);
                             }
                         }
                     }
                 }
             }
-
-            /** 发送完成后，清空，否则一直发送关键帧，无法播放 */
-            unset(self::$server2ClientsData[(int)$fd]);
         }
 
-        /** 然后发送普通帧，区分了路径之后，按道理应该每一个进程或者线程单独处理一路数据，
-         * 但是，这里是单进程，那就循环处理每一路资源，可能性能会下降，但是不管了，这里只管实现功能，不管性能了
-         */
-        $array = self::$gatewayBuffer;
-        self::$gatewayBuffer = [];
-        foreach ($array as $path => $buffers) {
-            foreach ($buffers as $buffer){
+        /** 获取当前客户端的普通帧数据 */
+        $array = self::$gatewayBuffer[(int)$fd];
+        /** 立刻清空重新接收数据，防止时间差掉帧 */
+        self::$gatewayBuffer[(int)$fd] = [];
+        foreach ($array as $path => $buffer) {
                 if ($buffer['cmd'] == 'frame') {
                     /** 保持数据的原始性，尽量不添加其他数据 */
                     $type = $buffer['data']['type'];
@@ -870,18 +724,42 @@ class RtmpDemo
                     $stringArray = self::splitString($string, 1024);
                     if (is_resource($fd)) {
                         foreach ($stringArray as $item) {
-                            try {
-                                @fwrite($fd, $item);
-                            } catch (\Exception $exception) {
-                                unset(RtmpDemo::$allSocket[(int)$fd]);
-                                break;
-                            }
+                            fwrite($fd, $item);
                         }
                     }
                 }
-            }
         }
 
+    }
+
+    /**
+     * 网关监测客户端可读事件
+     * @param $fd
+     * @comment 这里是主服务器
+     */
+    public function gatewayRead($fd)
+    {
+        if (is_resource($fd)) {
+            $buffer = fread($fd, 15);
+            self::$gatewayServerBuffer .= $buffer;
+            if ($pos = strpos(self::$gatewayServerBuffer, "\r\n\r\n")) {
+                /** 获取完整的内容 */
+                $content = substr(self::$gatewayServerBuffer, 0, $pos + 4);
+                /** 更新暂存区 */
+                self::$gatewayServerBuffer = substr(self::$gatewayServerBuffer, $pos + 4);
+                /** 暂时只传递了path ,后期可能会传递其他数据 */
+                $array = explode("\r\n", $content);
+                $path = $array[0];
+                /** 按照路径将客户端分开保存 */
+                RtmpDemo::$flvClientsInfo[$path][(int)$fd] = $fd;
+                /** 直接从服务端获取关键帧 */
+                $keyFrame = MediaServer::getKeyFrame($path) ?? [];
+                $decodeFrame = [MediaServer::$metaKeyFrame[$path] ?? [], MediaServer::$avcKeyFrame[$path] ?? [], MediaServer::$aacKeyFrame[$path] ?? []];
+                /** 将数据交给gateWayWrite() 处理 */
+                self::$server2ClientsData[(int)$fd][] = $decodeFrame;
+                self::$server2ClientsData[(int)$fd][] = $keyFrame;
+            }
+        }
     }
 
     /** 已发送关键帧 */
@@ -899,23 +777,19 @@ class RtmpDemo
     {
         if (isset(self::$importantFrame[$path]) && isset(self::$seqs[$path]) && count(self::$seqs[$path]) == 3) {
             /** 发送开播命令 */
-            RtmpDemo::startPlay($client);
+            self::startPlay($client);
+            var_dump("发送开播命令完成");
             /** 先发第一次解码帧，要求播放器解码 */
             self::frameSend(self::$seqs[$path]['meta'], $client);
             self::frameSend(self::$seqs[$path]['avc'], $client);
             self::frameSend(self::$seqs[$path]['aac'], $client);
-            /** 防止播放器无法解码，发送两次解码帧 */
-            self::frameSend(self::$seqs[$path]['meta'], $client);
-            self::frameSend(self::$seqs[$path]['avc'], $client);
-            self::frameSend(self::$seqs[$path]['aac'], $client);
-
             var_dump("发送解码命令完成" . count(self::$seqs[$path]));
             /** 再发送I帧 */
             $count = count(self::$importantFrame[$path]);
             /** 只发送最近的self::$playKeyFrameLimit帧 ，并且更新关键帧，防止内存溢出，同时保证有足够的关键帧解码 */
-            if ($count > self::$playKeyFrameLimit) {
-                self::$importantFrame[$path] = array_slice(self::$importantFrame[$path], $count - self::$playKeyFrameLimit, self::$playKeyFrameLimit);
-            }
+//            if ($count > self::$playKeyFrameLimit) {
+//                self::$importantFrame[$path] = array_slice(self::$importantFrame[$path], $count - self::$playKeyFrameLimit, self::$playKeyFrameLimit);
+//            }
 
             /** 发送关键帧给播放器 */
             foreach (self::$importantFrame[$path] as $frame) {
@@ -950,12 +824,23 @@ class RtmpDemo
             /** 需要监听socket，自动清理已报废的链接 */
             foreach (self::$allSocket as $key => $value) {
                 if (!is_resource($value)) {
+
+                    $isClient = false;
                     /** 如果客户端掉线了，那么需要重新创建一个代理客户端 */
                     if ($value == self::$flvClient) {
-                        $this->createFlvClient();
+                        // $this->createFlvClient();
+                        $isClient = true;
                     }
+
                     /** 删除已掉线的所有客户端 */
                     unset(self::$allSocket[$key]);
+                    /** 清理当前此客户端的读写事件 */
+                    unset($this->_allEvents[$key]);
+
+                    if ($isClient) {
+                        self::$flvClient = null;
+                        $this->createFlvClient();
+                    }
                 }
             }
             $write = $read = self::$allSocket;
