@@ -9,10 +9,13 @@ namespace MediaServer\Rtmp;
  */
 class RtmpHandshake
 {
-
+    /** 未初始化 */
     const RTMP_HANDSHAKE_UNINIT = 0;
+    /** 读取c0 */
     const RTMP_HANDSHAKE_C0 = 1;
+    /** 读取c1 */
     const RTMP_HANDSHAKE_C1 = 2;
+    /** 读取c2 */
     const RTMP_HANDSHAKE_C2 = 3;
 
 
@@ -26,12 +29,13 @@ class RtmpHandshake
      */
     static function handshakeGenerateS0S1S2($c1)
     {
+        /** C：无符号字符  a1536：就是生成1536位字符，如果不足，就用空字符串填充 */
         $data = pack("Ca1536a1536",
-            /** 版本号默认是3 */
+            /** 版本号默认是3 用C方法打包 */
             3,
-            /** 生成s1 */
+            /** 生成s1 用a1536方法打包 */
             self::handshakeGenerateS1(),
-            /** 生成s2 */
+            /** 生成s2 用a1536方法打包 */
             self::handshakeGenerateS2($c1)
         );
         return $data;
@@ -44,10 +48,11 @@ class RtmpHandshake
      */
     static function handshakeGenerateS1()
     {
+        /** N 表示一個無符號長整型數據，佔用 4 個字節 */
         $s1 = pack('NNa1528',
-            /** 4为时间戳 */
+            /** 4为时间戳 使用N方法打包4个bite */
             timestamp(),
-            /** 4位0 */
+            /** 4位0 使用N方法打包4个bite */
             0,
             /** 1528位随机数 */
             make_random_str(1528)
@@ -64,6 +69,7 @@ class RtmpHandshake
     static function handshakeGenerateS2($c1)
     {
         /** c1解码 */
+        /** 使用N方法解码前4个字节，设置为变量时间戳timestamp 使用N方法解码4个字节赋值为变量zero,读取1528为字节不足用空填充并赋值为random */
         $c1Data = unpack('Ntimestamp/Nzero/a1528random', $c1);
         $s2 = pack('NNa1528',
             $c1Data['timestamp'],

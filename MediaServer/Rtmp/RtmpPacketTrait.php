@@ -133,7 +133,7 @@ trait RtmpPacketTrait
                 if ($p->isReady()) {//$this->bytesRead == $this->length
                     //开始读取下一个包
                     $this->chunkState = RtmpChunk::CHUNK_STATE_BEGIN;
-                    /** 处理包数据 */
+                    /** 处理包数据，这个时候传递的是一个完整的rtmp数据包 */
                     $this->rtmpHandler($p);
 
                     //当前包已经读取完成数据，释放当前包

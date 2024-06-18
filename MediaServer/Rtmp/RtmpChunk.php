@@ -19,6 +19,12 @@ class RtmpChunk
     /**
      * 资源ID分块 基本表头长度
      * chunk stream id length base header length
+     * 3個字節的頭部長度：
+     *
+     * 對於 RTMP 封包來說，如果消息的大小不超過 65536 個字節，則頭部長度為3個字節。這種情況下，封包的格式是：1個字節的基本頭部（Basic Header）和2個字節的消息長度字段（Message Header）。
+     * 4個字節的頭部長度：
+     *
+     * 當消息的大小超過 65536 個字節時，RTMP 封包的頭部就會變成4個字節。這種情況下，封包的格式是：1個字節的基本頭部、3個字節的扩展消息长度字段（Extended Message Header）。
      */
     const BASE_HEADER_SIZES = [3, 4];
 

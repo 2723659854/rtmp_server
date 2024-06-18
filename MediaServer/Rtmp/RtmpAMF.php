@@ -15,7 +15,7 @@ require_once __DIR__ . '/../../SabreAMF/AMF0/Deserializer.php';
  */
 class RtmpAMF
 {
-    /** 定义命令编码 */
+    /** 定义命令编码 可以使用下面的命令编写rtmp客户端 */
     const RTMP_CMD_CODE = [
         '_result' => ['transId', 'cmdObj', 'info'],
         '_error' => ['transId', 'cmdObj', 'info', 'streamId'], // Info / Streamid are optional

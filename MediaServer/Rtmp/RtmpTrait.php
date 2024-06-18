@@ -32,9 +32,9 @@ trait RtmpTrait
         //根据 msg type 进入处理流程
         // logger()->info("[packet] {$p->type}");
         //$b = memory_get_usage();
-        /** 判断包类型 */
+        /** 判断包类型 ，根据rtmp包的类型处理数据 */
         switch ($p->type) {
-            /** 分包大小 */
+            /** 设置切片大小 */
             case RtmpPacket::TYPE_SET_CHUNK_SIZE:
                 /** 终止 */
             case RtmpPacket::TYPE_ABORT:

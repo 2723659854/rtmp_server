@@ -451,24 +451,18 @@ class RtmpDemo
                 $frame = new MetaDataFrame($frame);
             }
 
-            /** 存储所有的音视频帧 （这个方法不合理，当内存耗尽之后，进程会崩溃退出，等后面想个办法再处理） */
+            /** 处理解码帧 */
             if ($important) {
                 /** 保存解码帧 ，此时服务端发送的解码帧是meta,avc,aac */
                 if ((int)$seq != 4) {
                     self::$seqs[$path][$seq] = $frame;
-                    self::$gopFrameCount[$path] = $count;
-                    /** 因为服务端首先发送关键帧，然后再发I帧，所以此时需要清空当前路径的连续帧，清理旧关键帧，同时防止内存泄漏 */
-                    self::$importantFrame[$path] = [];
                     /** 避免重复发送解码帧 */
                     return;
-                } else {
-                    /** 保存连续帧 */
-                    self::$importantFrame[$path][] = $frame;
                 }
             }
-
+            /** 处理连续帧，用于解码一个完整的页面 */
+            self::addKeyFrames($frame, $path);
             /** 如果客户端多次断开 ，服务端无法给客户端发送数据 */
-            //var_dump($timestamp.'...');
 
             if (isset(self::$playerGroupByPath[$path])) {
                 foreach (self::$playerGroupByPath[$path] as $index => $client) {
@@ -483,6 +477,7 @@ class RtmpDemo
                             self::sendKeyFrameToPlayer($client, $path);
                         }
                     } else {
+                        /** 删除播放器客户端 */
                         unset(self::$playerGroupByPath[$path][$index]);
                     }
                 }
@@ -508,6 +503,55 @@ class RtmpDemo
                 self::$playerGroupByPath[$path][] = $socket;
                 /** 暂时只是通知服务端需要播放的资源 */
                 fwrite($fd, "{$path}\r\n\r\n");
+            }
+        }
+    }
+
+    /**
+     * 追加连续帧，用于解码成一个完整的画面
+     * @param MediaFrame $frame
+     * @param string $path
+     * @return void
+     */
+    public static function addKeyFrames(MediaFrame $frame, string $path)
+    {
+        if ($frame->FRAME_TYPE == MediaFrame::VIDEO_FRAME) {
+            $avcPack = $frame->getAVCPacket();
+            /** 如果是关键帧I帧 */
+            if ($frame->frameType === VideoFrame::VIDEO_FRAME_TYPE_KEY_FRAME
+                &&
+                /** 是nalu数据信息，就是媒体信息，表示这是一个独立的片段  */
+                $avcPack->avcPacketType === AVCPacket::AVC_PACKET_TYPE_NALU) {
+                /** 如果这是一个独立的片段，那么就可以清空前面的连续帧，保存新的关键帧作为连续帧，可以用来解码出一个完整的画面 */
+                self::$importantFrame[$path] = [];
+                var_dump("清空连续帧");
+            }
+
+            /** 如果是关键帧  */
+            if ($frame->frameType === VideoFrame::VIDEO_FRAME_TYPE_KEY_FRAME
+                &&
+                $avcPack->avcPacketType === AVCPacket::AVC_PACKET_TYPE_SEQUENCE_HEADER) {
+
+                /** 忽略avc序列头，就是忽略解码帧 */
+            } else {
+
+                /** 将包投递到队列中，其他的关键帧全部保存 */
+                self::$importantFrame[$path][] = $frame;
+
+            }
+        }
+
+        if ($frame->FRAME_TYPE == MediaFrame::AUDIO_FRAME) {
+            /** 获取aac数据包 */
+            $aacPack = $frame->getAACPacket();
+            /** 如果是继续接收到客户端发送的音频头部数据，直接丢弃 */
+            if ($aacPack->aacPacketType == AACPacket::AAC_PACKET_TYPE_SEQUENCE_HEADER) {
+
+            } else {
+                //音频关键帧缓存
+                /** 音频帧，除了第一帧是配置参数需要丢弃，后面的音频帧都要保存到连续帧队里里面 */
+                self::$importantFrame[$path][] = $frame;
+
             }
         }
     }
@@ -708,7 +752,7 @@ class RtmpDemo
         }
 
         /** 获取当前客户端的普通帧数据 */
-        $array = self::$gatewayBuffer[(int)$fd];
+        $array = self::$gatewayBuffer[(int)$fd]??[];
         /** 立刻清空重新接收数据，防止时间差掉帧 */
         self::$gatewayBuffer[(int)$fd] = [];
         foreach ($array as $path => $buffer) {
@@ -779,13 +823,7 @@ class RtmpDemo
      */
     public static function sendKeyFrameToPlayer($client, $path)
     {
-        if (
-            isset(self::$importantFrame[$path])
-            && isset(self::$gopFrameCount[$path])
-            && (count(self::$importantFrame[$path]) == self::$gopFrameCount[$path])
-            && isset(self::$seqs[$path])
-            && count(self::$seqs[$path]) == 3
-        ) {
+        if (isset(self::$importantFrame[$path])  && count(self::$seqs[$path]) == 3) {
             /** 发送开播命令 */
             self::startPlay($client);
             var_dump("发送开播命令完成");

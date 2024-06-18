@@ -27,17 +27,7 @@ trait RtmpAudioHandlerTrait
          * @var $p RtmpPacket
          */
         $p = $this->currentPacket;
-        /** 加入到队列 */
-//        RtmpDemo::$gatewayBuffer[] = [
-//            'cmd'=>'frame',
-//            'socket'=>null,
-//            'data'=>[
-//                'path'=>$this->publishStreamPath,
-//                'frame'=>$p->payload,
-//                'timestamp'=>$p->clock,
-//                'type'=>MediaFrame::AUDIO_FRAME
-//            ]
-//        ];
+
         /** 将音频文件投递到audio解码器中 */
         $audioFrame = new AudioFrame($p->payload, $p->clock);
 
@@ -57,9 +47,10 @@ trait RtmpAudioHandlerTrait
         if ($audioFrame->soundFormat == AudioFrame::SOUND_FORMAT_AAC) {
             /** 获取aac数据包 */
             $aacPack = $audioFrame->getAACPacket();
-            /** 获取数据包头 是0 意思是第一个包 */
+            /** 根据aac的类型进行处理 */
+            /** 获取数据包头 是0 这个包是设置aac的相关配置，解码参数，比如采样率，声道等，通常这个包是音频第一个包 */
             if ($aacPack->aacPacketType === AACPacket::AAC_PACKET_TYPE_SEQUENCE_HEADER) {
-                /** aac 序列 */
+                /** aac 序列  aac配置包 */
                 $this->isAACSequence = true;
                 /** aac序列的头部 */
                 $this->aacSequenceHeaderFrame = $audioFrame;
@@ -79,11 +70,8 @@ trait RtmpAudioHandlerTrait
                 if ($aacPack->aacPacketType == AACPacket::AAC_PACKET_TYPE_SEQUENCE_HEADER) {
 
                 } else {
-                    /** 更新网关的音频关键帧 */
-                    //RtmpDemo::changeFrame2ArrayAndSend($audioFrame,$this->publishStreamPath);
                     //音频关键帧缓存
-                    /** 缓存音频数据 ，就是丢弃头部，其他音频数据保留，然后再自己分隔数据并下发 */
-                    /** 从上面的代码逻辑来看，会丢弃第一个音频包 */
+                    /** 音频帧，除了第一帧是配置参数需要丢弃，后面的音频帧都要保存到连续帧队里里面 */
                     $this->gopCacheQueue[] = $audioFrame;
                 }
             }
@@ -91,7 +79,7 @@ trait RtmpAudioHandlerTrait
 
         }
         // MediaServer::addPublish($this); 在RTMPinvokeHandlerTrait.PHP 处理命令的时候调用了媒体服务中心，关联上这个on_frame事件的
-        /** 绑定On_fram事件 ，传入数据包 */
+        /** 绑定On_fram事件 ，传入数据包，将音频数据包推送给所有链接当前直播源的播放器客户端 */
         $this->emit('on_frame', [$audioFrame, $this]);
 
         //logger()->info("rtmpAudioHandler");

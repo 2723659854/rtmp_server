@@ -71,7 +71,9 @@ class RtmpPacket
 
     public $timestamp = 0;
     public $length = 0;
+
     public $type = 0;
+
     public $streamId = 0;
 
     /** PTS 显示时间戳 */

@@ -236,8 +236,9 @@ class RtmpStream extends EventEmitter implements DuplexMediaStreamInterface, Ver
     public $enableGop = true;
 
     /**
-     * 数据队列 里面存放了 avc 和aac 和 metaData，先进先出的原则，实现原理是foreach
+     * 数据队列 里面存放了 avc 和aac ，先进先出的原则，实现原理是foreach
      * @var MediaFrame[]
+     * @comment 这个队列存放了从开播到当前时间的所有I帧，就是音频和视频的关键帧，客户端播放的时候，需要依靠这些I帧解码处完整页面
      */
     public $gopCacheQueue = [];
 

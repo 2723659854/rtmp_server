@@ -10,6 +10,9 @@ use MediaServer\Utils\BinaryStream;
  * 分包
  * Trait RtmpChunkHandlerTrait
  * @package MediaServer\Rtmp
+ * @note rtmp协议为了高效传输数据，对数据进行了压缩，压缩办法就是使用的位运算。一个字节有8个bite，至少可以传递8个信号数据，然后按照指定的规则对
+ * 不同的位进行运算，又可以传递新的数据信号，对数据进行了极致的压缩，降低了宽带占用，提升了数据传输性能。
+ * 但是 ，对读代码的人不友好，看着太费劲了。
  */
 trait RtmpChunkHandlerTrait
 {
@@ -56,7 +59,7 @@ trait RtmpChunkHandlerTrait
                 } else {
                     break;
                 }
-                /** 数据分包准备完毕状态 */
+            /** 数据分包准备完毕状态 */
             case RtmpChunk::CHUNK_STATE_HEADER_READY:
                 /** 这里是初始化包的基本数据 */
                 /** 判断是否有指定长度的数据 */
@@ -66,6 +69,7 @@ trait RtmpChunkHandlerTrait
                     $header = $stream->readTinyInt();
                     /** 获取格式 */
                     $fmt = $header >> 6;
+                    /** 获取流ID */
                     /** 数据的id 为什么数据传输都要用& | >> 运算呢，是减小包体积，还是为了加密 */
                     /** 通过头部确定对方是大端存储还是小端存储 ，数据解码从前往后，还是从后往前 */
                     switch ($csId = $header & 0x3f) {
@@ -98,6 +102,15 @@ trait RtmpChunkHandlerTrait
                         $p = $this->allPackets[$csId];
                     }
 
+                    /**
+                     * 不同的 fmt 值表示不同的基本頭部格式，這些格式決定了如何解析後續的封包信息。具體含義如下：
+                     * fmt = 0：封包使用完整的基本頭部格式。這種格式包括 1 個字節的基本頭部和 2 個字節的消息長度字段（Message Header）。
+                     * fmt = 1：封包使用簡化的基本頭部格式。這種格式包括 2 個字節的基本頭部和 2 個字節的消息長度字段。
+                     * fmt = 2：封包使用簡化的基本頭部格式。這種格式包括 3 個字節的基本頭部，並且不包括消息長度字段。
+                     * fmt = 3：封包使用簡化的基本頭部格式。這種格式包括 1 個字節的基本頭部，並且不包括通道 ID 和消息長度字段。
+                     * 這些不同的 fmt 值允許 RTMP 在不同的情況下有效地處理封包，包括小封包的快速發送和大封包的高效管理。
+                     * fmt 字段的設計考慮了封包大小和通道管理的需求，以實現高效的流媒體傳輸和管理
+                     */
                     /** 设置编码格式 */
                     //set fmt
                     $p->chunkType = $fmt;
@@ -106,7 +119,7 @@ trait RtmpChunkHandlerTrait
 
                     //base header 长度不变
                     //$p->baseHeaderLen = RtmpPacket::$BASEHEADERSIZE[$csId] ?? 1;
-                    /** chunk = basic + base */
+                    /** 消息长度： chunk = basic + base */
                     /** 计算头部长度，应该是去掉头部前面符号 ，比如ws协议前面有W等字符 */
                     $p->msgHeaderLen = $p->chunkHeaderLen - $p->baseHeaderLen;
 

@@ -265,10 +265,9 @@ class MediaServer
     public static array $metaKeyFrame = [];
 
     /**
-     * 获取关键帧
+     * 获取解码帧
      * @param string $path
-     * @return array
-     * @note 这里存在一个问题，为了正常播放，目前所有的播放器获取解码关键帧都是请求的主服务器，不知道当客户端达到一定数量级后，推流主服务会不会挂。
+     * @return array 解码帧
      */
     public static function getKeyFrame(string $path):array
     {
@@ -277,10 +276,6 @@ class MediaServer
         }
         /** 将关键帧转发到网关 必须要先发送关键帧，播放器才可以正常播放 */
         $publishStream = self::getPublishStream($path);
-        /** 当前所有的I帧 */
-        $gopCacheQueue = $publishStream->getGopCacheQueue();
-        /** 当前I帧总数 */
-        $keyCount = count($gopCacheQueue);
         /** 缓存所有的关键帧 */
         $array = [];
         /**
@@ -299,7 +294,7 @@ class MediaServer
                     'type' => $frame->FRAME_TYPE,
                     'important' => 1,
                     'order' => 'meta',
-                    'keyCount' => $keyCount
+                    'keyCount' => 0
                 ]
             ];
         }
@@ -321,7 +316,7 @@ class MediaServer
                     'type' => $frame->FRAME_TYPE,
                     'important' => 1,
                     'order' => 'avc',
-                    'keyCount' => $keyCount
+                    'keyCount' => 0
                 ]
             ];
         }
@@ -344,29 +339,6 @@ class MediaServer
                     'type' => $frame->FRAME_TYPE,
                     'important' => 1,
                     'order' => 'aac',//修改为seq
-                    'keyCount' => $keyCount
-                ]
-            ];
-        }
-
-        /**
-         * 发送关键帧
-         * @comment 这个关键帧，就是首张画面，直播的后续画面是基于首张画面渲染的。
-         * @note 这里面全是I帧，不可缺少，否则播放器不知道怎么渲染图像
-         */
-
-        foreach ($gopCacheQueue as $frame) {
-            /** 将数据发送给连接了网关的客户端 ,发送原始数据*/
-            $array[] = [
-                'cmd' => 'frame',
-                'socket' => null,
-                'data' => [
-                    'path' => $path,
-                    'frame' => $frame->_buffer,
-                    'timestamp' => $frame->timestamp ?? 0,
-                    'type' => $frame->FRAME_TYPE,
-                    'important' => 1,
-                    'order' => 4,
                     'keyCount' => 0
                 ]
             ];
