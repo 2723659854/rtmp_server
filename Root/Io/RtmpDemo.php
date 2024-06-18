@@ -404,6 +404,7 @@ class RtmpDemo
     /** 解码用的三个关键帧 */
     public static array $seqs = [];
 
+    public static array $lastCount = [];
     /**
      * 这里是flv客户端向播放器推送数据
      * @param $fd
@@ -429,11 +430,16 @@ class RtmpDemo
             //var_dump($timestamp);
             $important = $array[2];
             $count = $array[3];
-            /** 检测是否掉帧 */
-            var_dump($count);
+
             $path = $array[4];
             $seq = $array[5];
             $frame = $array[6];
+            /** 检测是否掉帧 ，从理论上来说，  */
+            if ((self::$lastCount[$path] +1) != $count){
+                var_dump("掉帧".(self::$lastCount[$path] +1));
+            }
+            /** 记录当前接受的帧 */
+            self::$lastCount[$path] = $count;
             /** 因为转发有延迟，所以使用新的时间戳 */
             //$timestamp = timestamp();
             //$string = $type . "\r\n" . $timestamp . "\r\n" . $important . "\r\n" . $count . "\r\n" . $path . "\r\n" . $seq . "\r\n" . $frame . "\r\n\r\n";
@@ -500,6 +506,8 @@ class RtmpDemo
                 if (isset(self::$seqs[$path]) && count(self::$seqs[$path])==3){
                     //不重複發送請求
                 }else{
+                    /** 初始化接收到的第一帧 */
+                    self::$lastCount[$path]=0;
                     /** 暂时只是通知服务端需要播放的资源 */
                     @fwrite($fd, "{$path}\r\n\r\n");
                 }
