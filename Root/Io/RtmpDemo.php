@@ -413,7 +413,6 @@ class RtmpDemo
     public function flvRead($fd)
     {
         /** 标记flvread 一直在工作 */
-        //var_dump('...');
         $buffer = fread($fd, 15);
         self::$readBuffer .= $buffer;
         /** 获取第一个报文结束符\r\n\r\n */
@@ -427,6 +426,7 @@ class RtmpDemo
 
             $type = ($array[0]);
             $timestamp = ($array[1]);
+            //var_dump($timestamp);
             $important = $array[2];
             /** I帧总数，开播解码需要用 */
             $count = $array[3];
@@ -760,6 +760,7 @@ class RtmpDemo
                 $stringArray = self::splitString($string, 1024);
                 if (is_resource($fd)) {
                     foreach ($stringArray as $item) {
+                        //var_dump($timestamp);
                         @fwrite($fd, $item);
                     }
                 }

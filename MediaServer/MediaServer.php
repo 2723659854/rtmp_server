@@ -161,14 +161,15 @@ class MediaServer
     static protected function delPlayerStream($path, $objId)
     {
         unset(self::$playerStream[$path][$objId]);
+        /** 因为需要使用网关转发，所以暂不清理推送逻辑 */
         //一个播放设备都没有
-        if (self::hasPublishStream($path) && count(self::getPlayStreams($path)) == 0) {
-            /** 获取这个路径下的推流资源 */
-            $p_stream = self::getPublishStream($path);
-            /** 移除事件 */
-            $p_stream->removeListener('on_frame', self::class . '::publisherOnFrame');
-            $p_stream->is_on_frame = false;
-        }
+//        if (self::hasPublishStream($path) && count(self::getPlayStreams($path)) == 0) {
+//            /** 获取这个路径下的推流资源 */
+//            $p_stream = self::getPublishStream($path);
+//            /** 移除事件 */
+//            $p_stream->removeListener('on_frame', self::class . '::publisherOnFrame');
+//            $p_stream->is_on_frame = false;
+//        }
     }
 
     /**
