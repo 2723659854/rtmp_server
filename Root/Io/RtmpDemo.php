@@ -250,6 +250,7 @@ class RtmpDemo
             foreach (self::$allSocket as $key => $value) {
                 if (!is_resource($value)) {
                     unset(self::$allSocket[$key]);
+                    unset(RtmpDemo::$flvClients[$key]);
                 }
             }
             $write = $read = self::$allSocket;
@@ -302,8 +303,6 @@ class RtmpDemo
                                     /** 这个服务端的作用是，把rtmp服务器的数据转发给客户端 ，那么就是可写事件 */
                                     self::add($clientSocket, self::EV_READ, [$this, 'gatewayRead']);
                                     self::add($clientSocket, self::EV_WRITE, [$this, 'gatewayWrite']);
-                                    /** 要求服务端强制更新关键帧 */
-                                    //MediaServer::$hasSendImportantFrame = false;
                                 }
 
                                 /** rtmp 服务 长链接 协议直接处理了数据，不会触发onMessage事件，无需设置onMessage */
@@ -400,17 +399,8 @@ class RtmpDemo
     /** 关键帧 */
     public static $importantFrame = [];
 
-    /** 关键帧总数 */
-    public static $keyFrameCount = 0;
-
-    /** 后面客户端播放后追加的关键帧 */
-    public static $addKeyFrameAfterPlay = [];
-
     /** 解码用的三个关键帧 */
     public static array $seqs = [];
-
-    /** 开播所需I帧总数 */
-    public static array $gopFrameCount = [];
 
     /**
      * 这里是flv客户端向播放器推送数据
@@ -500,9 +490,9 @@ class RtmpDemo
                 $path = $buffer['path'];
                 $socket = $buffer['client'];
                 /** 将播放器按资源分组 */
-                self::$playerGroupByPath[$path][] = $socket;
+                self::$playerGroupByPath[$path][(int)$socket] = $socket;
                 /** 暂时只是通知服务端需要播放的资源 */
-                fwrite($fd, "{$path}\r\n\r\n");
+                @fwrite($fd, "{$path}\r\n\r\n");
             }
         }
     }
@@ -524,7 +514,6 @@ class RtmpDemo
                 $avcPack->avcPacketType === AVCPacket::AVC_PACKET_TYPE_NALU) {
                 /** 如果这是一个独立的片段，那么就可以清空前面的连续帧，保存新的关键帧作为连续帧，可以用来解码出一个完整的画面 */
                 self::$importantFrame[$path] = [];
-                var_dump("清空连续帧");
             }
 
             /** 如果是关键帧  */
@@ -534,10 +523,8 @@ class RtmpDemo
 
                 /** 忽略avc序列头，就是忽略解码帧 */
             } else {
-
                 /** 将包投递到队列中，其他的关键帧全部保存 */
                 self::$importantFrame[$path][] = $frame;
-
             }
         }
 
@@ -546,12 +533,10 @@ class RtmpDemo
             $aacPack = $frame->getAACPacket();
             /** 如果是继续接收到客户端发送的音频头部数据，直接丢弃 */
             if ($aacPack->aacPacketType == AACPacket::AAC_PACKET_TYPE_SEQUENCE_HEADER) {
-
             } else {
                 //音频关键帧缓存
                 /** 音频帧，除了第一帧是配置参数需要丢弃，后面的音频帧都要保存到连续帧队里里面 */
                 self::$importantFrame[$path][] = $frame;
-
             }
         }
     }
@@ -565,7 +550,6 @@ class RtmpDemo
      */
     public static function frameSend($frame, $client)
     {
-        //   logger()->info("send ".get_class($frame)." timestamp:".($frame->timestamp??0));
         switch ($frame->FRAME_TYPE) {
             case MediaFrame::VIDEO_FRAME:
                 return self::sendVideoFrame($frame, $client);
@@ -611,11 +595,8 @@ class RtmpDemo
         self::write($chunks, $client);
     }
 
-    /** 是否已经发送了第一个flv块*/
+    /** 是否已经发送header头 */
     public static $hasSendHeader = [];
-
-    /** 使用网关播放的播放器是否发送了开始播放命令 */
-    public static $hasStartPlay = [];
 
     /** 开始播放命令 */
     public static function startPlay($client)
@@ -625,8 +606,6 @@ class RtmpDemo
         $flvHeader[4] = chr(ord($flvHeader[4]) | 4);
         $flvHeader[4] = chr(ord($flvHeader[4]) | 1);
         self::write($flvHeader, $client);
-        /** 发送完关键帧结束，才可以发送普通帧 */
-        self::$hasStartPlay[(int)$client] = 1;
     }
 
     /**
@@ -657,7 +636,7 @@ class RtmpDemo
             $string = \dechex(\strlen($data)) . "\r\n$data\r\n";
         }
         /** 不切片，直接发送，因为我怀疑如果切片，会导致浏览器拉去数据失败，掉帧，播放失败 */
-        fwrite($client, $string);
+        @fwrite($client, $string);
     }
 
 
@@ -693,9 +672,6 @@ class RtmpDemo
     public static array $flvClientsInfo = [];
     /** 服务端网关缓存 */
     public static array $gatewayBuffer = [];
-    /** 存放关键帧 ，当代理客户端链接后，立刻发送关键帧 */
-    public static array $gatewayImportantFrame = [];
-
 
     /** 按固定长度切割字符串 */
     public static function splitString($str, $length)
@@ -743,7 +719,7 @@ class RtmpDemo
                         $stringArray = self::splitString($string, 1024);
                         if (is_resource($fd)) {
                             foreach ($stringArray as $item) {
-                                fwrite($fd, $item);
+                                @fwrite($fd, $item);
                             }
                         }
                     }
@@ -755,7 +731,7 @@ class RtmpDemo
         $array = self::$gatewayBuffer[(int)$fd]??[];
         /** 立刻清空重新接收数据，防止时间差掉帧 */
         self::$gatewayBuffer[(int)$fd] = [];
-        foreach ($array as $path => $buffer) {
+        foreach ($array as  $buffer) {
             if ($buffer['cmd'] == 'frame') {
                 /** 保持数据的原始性，尽量不添加其他数据 */
                 $type = $buffer['data']['type'];
@@ -772,7 +748,7 @@ class RtmpDemo
                 $stringArray = self::splitString($string, 1024);
                 if (is_resource($fd)) {
                     foreach ($stringArray as $item) {
-                        fwrite($fd, $item);
+                        @fwrite($fd, $item);
                     }
                 }
             }
@@ -813,9 +789,6 @@ class RtmpDemo
     /** 已发送关键帧 */
     public static array $hasSendKeyFrame = [];
 
-    /** 限制要发送的关键帧数量 */
-    public static int $playKeyFrameLimit = 500;
-
     /**
      * 向播放器推送关键帧
      * @param $client
@@ -823,6 +796,7 @@ class RtmpDemo
      */
     public static function sendKeyFrameToPlayer($client, $path)
     {
+        /** 使用网关的播放器秒开直播 */
         if (isset(self::$importantFrame[$path])  && count(self::$seqs[$path]) == 3) {
             /** 发送开播命令 */
             self::startPlay($client);
@@ -865,18 +839,17 @@ class RtmpDemo
             /** 需要监听socket，自动清理已报废的链接 */
             foreach (self::$allSocket as $key => $value) {
                 if (!is_resource($value)) {
-
                     $isClient = false;
                     /** 如果客户端掉线了，那么需要重新创建一个代理客户端 */
                     if ($value == self::$flvClient) {
-                        // $this->createFlvClient();
                         $isClient = true;
                     }
-
                     /** 删除已掉线的所有客户端 */
                     unset(self::$allSocket[$key]);
                     /** 清理当前此客户端的读写事件 */
                     unset($this->_allEvents[$key]);
+                    /** 移除播放器链接，移除tcp链接 */
+                    unset(self::$playerClients[$key],self::$clientTcpConnections[$key]);
 
                     if ($isClient) {
                         self::$flvClient = null;
@@ -934,7 +907,6 @@ class RtmpDemo
                         }
                         /** 将这个客户端连接保存，目测这里如果不保存，应该是无法发送和接收消息的，就是要把所有的连接都保存在内存中 */
                         RtmpDemo::$allSocket[(int)$clientSocket] = $clientSocket;
-
 
                     } else {
 

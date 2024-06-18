@@ -115,8 +115,6 @@ class MediaServer
         /** 直接开始推流 */
         $stream->on('on_frame', MediaServer::class . '::publisherOnFrame');
         $stream->is_on_frame = true;
-        /**  初始化当前路径没有保存先关关键帧 */
-        self::$hasSendImportantFrame[$path] = false;
         /** 初始化代理客户端 */
         RtmpDemo::$flvClientsInfo[$path] = [];
         /** 初始化每一路直播的解码关键帧 */
@@ -130,9 +128,11 @@ class MediaServer
      */
     static protected function delPublishStream($path)
     {
-        /** 清除ts文件缓存，防止重新开播的时候还有上一次直播的数据 */
-        HLSDemo::close($path);
         unset(self::$publishStream[$path]);
+        /** 初始化代理客户端 */
+        /** 清理当前路径的解码帧 */
+        /** 清空网关缓存 */
+        unset(RtmpDemo::$flvClientsInfo[$path],MediaServer::$metaKeyFrame[$path] , MediaServer::$avcKeyFrame[$path] , MediaServer::$aacKeyFrame[$path] , RtmpDemo::$gatewayBuffer[$path]);
     }
 
     /**
@@ -202,13 +202,6 @@ class MediaServer
 
     }
 
-    /** 播放之前需要先依次 发送 meta元数据 就是基本参数 发送视频avc数据 发送音频aac数据 发送关键帧*/
-
-    /** 是否已发送关键帧 ，按照路径区分 ，开播的时候初始化为false ，当有新的代理客户端接入的时候，发送关键帧 */
-    public static array $hasSendImportantFrame = [];
-
-    public static int $count = 0;
-
     /**
      * 转发流媒体数据
      * @param $publisher PublishStreamInterface 发布者 可以是音频，可以是视频
@@ -276,8 +269,7 @@ class MediaServer
         }
         /** 将关键帧转发到网关 必须要先发送关键帧，播放器才可以正常播放 */
         $publishStream = self::getPublishStream($path);
-        /** 缓存所有的关键帧 */
-        $array = [];
+
         /**
          * 发送meta元数据 就是基本参数
          * meta data send
@@ -343,7 +335,7 @@ class MediaServer
                 ]
             ];
         }
-        return $array;
+        return [];
     }
 
 
