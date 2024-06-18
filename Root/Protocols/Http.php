@@ -359,10 +359,11 @@ class Http
         }
         /** 拼接文件路径 */
         $file = dirname(__DIR__, 2) .  DIRECTORY_SEPARATOR . $path;
-        if (!is_file($file)) {
+        if (!is_file($file) || !file_exists($file)) {
             /** 返回404 */
             $connection->send(new Response(404, ['Access-Control-Allow-Origin' => '*'], 'not found'));
         }
+
         /** 允许跨域 */
         $header = [
             'Access-Control-Allow-Origin' => '*',
