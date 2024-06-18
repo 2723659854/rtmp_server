@@ -360,7 +360,8 @@ class RtmpDemo
         /** 涉及到socket通信的地方，调用RuntimeException都会导致进程退出，抛出异常：Fatal error: Uncaught RuntimeException ，这是个很诡异的事情 */
         if ($errno) {
             var_dump($errno, $errstr);
-            return;
+            var_dump("創建flv代理客戶端失敗");
+            return null;
         }
         /** 设置位非阻塞状态 */
         stream_set_blocking($socket, false);
@@ -371,6 +372,7 @@ class RtmpDemo
         /** 给客户端创建读写事件 ,不需要想服务端发送任何数据 */
         self::add(self::$flvClient, self::EV_READ, [$this, 'flvRead']);
         self::add(self::$flvClient, self::EV_WRITE, [$this, 'flvWrite']);
+        var_dump("創建flv客戶端成功");
         return $socket;
     }
 
