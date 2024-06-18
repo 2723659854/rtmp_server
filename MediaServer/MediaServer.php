@@ -224,7 +224,8 @@ class MediaServer
                 'type' => $frame->FRAME_TYPE,
                 'important' => 0,
                 'order' => 4,
-                'keyCount' => 0
+                /** 检测是否掉帧 */
+                'keyCount' => self::$count++
             ]
         ];
 

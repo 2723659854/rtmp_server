@@ -428,8 +428,9 @@ class RtmpDemo
             $timestamp = ($array[1]);
             //var_dump($timestamp);
             $important = $array[2];
-            /** I帧总数，开播解码需要用 */
             $count = $array[3];
+            /** 检测是否掉帧 */
+            var_dump($count);
             $path = $array[4];
             $seq = $array[5];
             $frame = $array[6];
@@ -754,7 +755,7 @@ class RtmpDemo
                 $count = $buffer['data']['keyCount'];
                 $seq = $buffer['data']['order'];
                 /** 使用http之类的文本分隔符 ，一整个报文之间用换行符分割 */
-                $string = $type . "\r\n" . $timestamp . "\r\n" . $important . "\r\n0\r\n" . $path . "\r\n" . $seq . "\r\n" . $data . "\r\n\r\n";
+                $string = $type . "\r\n" . $timestamp . "\r\n" . $important . "\r\n{$count}\r\n" . $path . "\r\n" . $seq . "\r\n" . $data . "\r\n\r\n";
 
                 /** 他么的这数据也太长了，将数据切片发送 */
                 $stringArray = self::splitString($string, 1024);
