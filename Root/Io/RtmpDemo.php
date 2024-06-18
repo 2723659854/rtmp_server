@@ -412,6 +412,8 @@ class RtmpDemo
      */
     public function flvRead($fd)
     {
+        /** 标记flvread 一直在工作 */
+        //var_dump('...');
         $buffer = fread($fd, 15);
         self::$readBuffer .= $buffer;
         /** 获取第一个报文结束符\r\n\r\n */
@@ -481,6 +483,7 @@ class RtmpDemo
      * 客户端向网关发送数据
      * @param resource $fd 网关服务器的链接
      * @comment 法相服务端一直可读，会一直发送数据，这里要判断，只有当有数据的时候才发送，不然对面服务器要崩溃
+     * @note 本客戶端通知服務端我訂閱的頻道，以及對當前播放器分組，
      */
     public function flvWrite($fd)
     {
@@ -493,8 +496,13 @@ class RtmpDemo
                 $socket = $buffer['client'];
                 /** 将播放器按资源分组 */
                 self::$playerGroupByPath[$path][(int)$socket] = $socket;
-                /** 暂时只是通知服务端需要播放的资源 */
-                @fwrite($fd, "{$path}\r\n\r\n");
+                if (isset(self::$seqs[$path]) && count(self::$seqs[$path])==3){
+                    //不重複發送請求
+                }else{
+                    /** 暂时只是通知服务端需要播放的资源 */
+                    @fwrite($fd, "{$path}\r\n\r\n");
+                }
+
             }
         }
     }
@@ -694,6 +702,8 @@ class RtmpDemo
      */
     public function gatewayWrite($fd)
     {
+       /** 标记 gateway网关一直在工作 */
+        //var_dump('---');
         /** 需要优先发送的关键帧 */
         if (isset(self::$server2ClientsData[(int)$fd]) && !empty(self::$server2ClientsData[(int)$fd])) {
             /** 发送完成后，清空，否则一直发送关键帧，无法播放 */

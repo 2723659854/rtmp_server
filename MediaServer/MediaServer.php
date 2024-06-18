@@ -202,6 +202,8 @@ class MediaServer
 
     }
 
+    /** 用於統計是否掉幀 */
+    public static int $count = 0;
     /**
      * 转发流媒体数据
      * @param $publisher PublishStreamInterface 发布者 可以是音频，可以是视频

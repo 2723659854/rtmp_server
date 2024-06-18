@@ -291,9 +291,6 @@ class HttpWMServer
             list(, $flvPath) = $matches;
             /** 通知网关服务端更新关键帧，同时服务端按路径保存客户端，提高服务端转发数据的效率 */
             RtmpDemo::$client2ServerData[]= ['client'=>$request->connection->getSocket(),'path'=>$flvPath];
-            ///** 发送开播命令，然后发送关键帧 可能这个时候没有关键帧，*/
-            //RtmpDemo::sendKeyFrameToPlayer($request->connection->getSocket(),$flvPath);
-
             return true;
         }
     }
