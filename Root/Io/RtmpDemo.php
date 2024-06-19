@@ -477,6 +477,8 @@ class RtmpDemo
                         } else {
                             /** 未发送解码帧，立即发送 */
                             self::sendKeyFrameToPlayer($client, $path);
+                            /** 强制发送，防止因为缺少连续帧而无法解码 */
+                            self::frameSend($frame, $client);
                         }
                     } else {
                         /** 删除播放器客户端 */
