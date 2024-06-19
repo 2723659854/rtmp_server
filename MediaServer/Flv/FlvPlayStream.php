@@ -235,8 +235,6 @@ class FlvPlayStream extends EventEmitter implements PlayStreamInterface
         if ($publishStream->isMetaData()) {
             $metaDataFrame = $publishStream->getMetaDataFrame();
             $this->sendMetaDataFrame($metaDataFrame);
-            var_dump('meta');
-
         }
 
         /**
@@ -246,8 +244,6 @@ class FlvPlayStream extends EventEmitter implements PlayStreamInterface
         if ($publishStream->isAVCSequence()) {
             $avcFrame = $publishStream->getAVCSequenceFrame();
             $this->sendVideoFrame($avcFrame);
-            var_dump('avc');
-
         }
 
 
@@ -258,7 +254,6 @@ class FlvPlayStream extends EventEmitter implements PlayStreamInterface
         if ($publishStream->isAACSequence()) {
             $aacFrame = $publishStream->getAACSequenceFrame();
             $this->sendAudioFrame($aacFrame);
-            var_dump('aac');
         }
 
         //gop 发送
@@ -266,12 +261,9 @@ class FlvPlayStream extends EventEmitter implements PlayStreamInterface
          * 发送关键帧
          */
         if ($this->isEnableGop()) {
-            $i = 0;
             foreach ($publishStream->getGopCacheQueue() as &$frame) {
                 $this->frameSend($frame);
-                $i++;
             }
-            var_dump('gop:'.$i);
         }
         /** 更新播放器状态为非空闲 */
         $this->isPlayerIdling = false;

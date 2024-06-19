@@ -44,6 +44,17 @@ class HttpWMServer
         $request->connection = $connection;
         //ignore connection message
         $connection->onMessage = null;
+        /** 使用代理转发直播数据 */
+        if (isset(RtmpDemo::$playerClients[(int)$connection->getSocket()])){
+            /** 强制更改 websocketType 为数组二进制 */
+            $connection->websocketType = Websocket::BINARY_TYPE_ARRAYBUFFER;
+            /** 修改链接模式为ws,重置connection链接 */
+            $connection->mode = 'ws';
+            RtmpDemo::$clientTcpConnections[(int)$connection->getSocket()] = $connection;
+            $this->findFlvGateway($request,$request->path());
+            return;
+        }
+        /** 使用主服务器发送直播数据 */
         if ($this->findFlv($request, $request->path())) {
             return;
         }
@@ -97,7 +108,9 @@ class HttpWMServer
     public function getHandlerGateway(Request $request,TcpConnection $connection)
     {
         $path = $request->path();
-
+        /** 修改connection的模式为http ，重置connection链接 */
+        $connection->mode = 'http';
+        RtmpDemo::$clientTcpConnections[(int)$connection->getSocket()] = $connection;
         //api
         if ($path === '/api') {
             /** 转发，不处理其他逻辑 */
@@ -274,8 +287,6 @@ class HttpWMServer
             return true;
         }
     }
-
-    //todo 两种方案，一种是转发flv 一种是转发rtmp，先尝试转发flv
 
     /**
      * 播放器请求网关请求播放flv

@@ -405,6 +405,7 @@ class RtmpDemo
     public static array $seqs = [];
 
     public static array $lastCount = [];
+
     /**
      * 这里是flv客户端向播放器推送数据
      * @param $fd
@@ -435,8 +436,8 @@ class RtmpDemo
             $seq = $array[5];
             $frame = $array[6];
             /** 检测是否掉帧 ，从理论上来说，  */
-            if ((self::$lastCount[$path] +1) != $count){
-                var_dump("掉帧".(self::$lastCount[$path] +1));
+            if ((self::$lastCount[$path] + 1) != $count) {
+                var_dump("掉帧" . (self::$lastCount[$path] + 1));
             }
             /** 记录当前接受的帧 */
             self::$lastCount[$path] = $count;
@@ -503,11 +504,11 @@ class RtmpDemo
                 $socket = $buffer['client'];
                 /** 将播放器按资源分组 */
                 self::$playerGroupByPath[$path][(int)$socket] = $socket;
-                if (isset(self::$seqs[$path]) && count(self::$seqs[$path])==3){
+                if (isset(self::$seqs[$path]) && count(self::$seqs[$path]) == 3) {
                     //不重複發送請求
-                }else{
+                } else {
                     /** 初始化接收到的第一帧 */
-                    self::$lastCount[$path]=0;
+                    self::$lastCount[$path] = 0;
                     /** 暂时只是通知服务端需要播放的资源 */
                     @fwrite($fd, "{$path}\r\n\r\n");
                 }
@@ -635,27 +636,32 @@ class RtmpDemo
      */
     public static function write($data, $client)
     {
-        /** 判断是否是发送第一个分块 */
-        if (!isset(self::$hasSendHeader[(int)$client])) {
-            /** 配置flv头 */
-            $content = "HTTP/1.1 200 OK\r\n";
-            $content .= "Cache-Control: no-cache\r\n";
-            $content .= "Content-Type: video/x-flv\r\n";
-            $content .= "Transfer-Encoding: chunked\r\n";
-            $content .= "Connection: keep-alive\r\n";
-            $content .= "Server: xiaosongshu\r\n";
-            $content .= "Access-Control-Allow-Origin: *\r\n";
-            $content .= "\r\n";
-            /** 向浏览器发送数据 */
-            $string = $content . \dechex(\strlen($data)) . "\r\n$data\r\n";
-            /** 标记已发送过头部了 */
-            self::$hasSendHeader[(int)$client] = 1;
+        /** websocket 链接直接发送，不分块，不打包http头 */
+        if (self::$clientTcpConnections[(int)$client]->mode == 'ws') {
+            self::$clientTcpConnections[(int)$client]->send($data);
         } else {
-            /** 直接发送分块后的flv数据 */
-            $string = \dechex(\strlen($data)) . "\r\n$data\r\n";
+            /** http 链接需要打包http头，分块发送 */
+            /** 判断是否是发送第一个分块 */
+            if (!isset(self::$hasSendHeader[(int)$client])) {
+                self::$clientTcpConnections[(int)$client]->send(new Response(200,[
+                    /** 禁止使用缓存 */
+                    'Cache-Control' => 'no-cache',
+                    /** 资源类型 flv */
+                    'Content-Type' => 'video/x-flv',
+                    /** 允许跨域 */
+                    'Access-Control-Allow-Origin' => '*',
+                    /** 长链接 */
+                    'Connection' => 'keep-alive',
+                    /** 数据是分块的，而不是告诉客户端数据的大小，通常用于流式传输 */
+                    'Transfer-Encoding' => 'chunked'
+                ],$data));
+                /** 标记已发送过头部了 */
+                self::$hasSendHeader[(int)$client] = 1;
+            } else {
+                /** 直接发送分块后的flv数据 */
+                self::$clientTcpConnections[(int)$client]->send(new Chunk($data));
+            }
         }
-        /** 不切片，直接发送，因为我怀疑如果切片，会导致浏览器拉去数据失败，掉帧，播放失败 */
-        @fwrite($client, $string);
     }
 
 
@@ -711,7 +717,7 @@ class RtmpDemo
      */
     public function gatewayWrite($fd)
     {
-       /** 标记 gateway网关一直在工作 */
+        /** 标记 gateway网关一直在工作 */
         //var_dump('---');
         /** 需要优先发送的关键帧 */
         if (isset(self::$server2ClientsData[(int)$fd]) && !empty(self::$server2ClientsData[(int)$fd])) {
@@ -749,10 +755,10 @@ class RtmpDemo
         }
 
         /** 获取当前客户端的普通帧数据 */
-        $array = self::$gatewayBuffer[(int)$fd]??[];
+        $array = self::$gatewayBuffer[(int)$fd] ?? [];
         /** 立刻清空重新接收数据，防止时间差掉帧 */
         self::$gatewayBuffer[(int)$fd] = [];
-        foreach ($array as  $buffer) {
+        foreach ($array as $buffer) {
             if ($buffer['cmd'] == 'frame') {
                 /** 保持数据的原始性，尽量不添加其他数据 */
                 $type = $buffer['data']['type'];
@@ -819,7 +825,7 @@ class RtmpDemo
     public static function sendKeyFrameToPlayer($client, $path)
     {
         /** 使用网关的播放器秒开直播 */
-        if (isset(self::$importantFrame[$path])  && count(self::$seqs[$path]) == 3) {
+        if (isset(self::$importantFrame[$path]) && count(self::$seqs[$path]) == 3) {
             /** 发送开播命令 */
             self::startPlay($client);
             var_dump("发送开播命令完成");
@@ -871,7 +877,7 @@ class RtmpDemo
                     /** 清理当前此客户端的读写事件 */
                     unset($this->_allEvents[$key]);
                     /** 移除播放器链接，移除tcp链接 */
-                    unset(self::$playerClients[$key],self::$clientTcpConnections[$key]);
+                    unset(self::$playerClients[$key], self::$clientTcpConnections[$key]);
 
                     if ($isClient) {
                         self::$flvClient = null;
