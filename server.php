@@ -9,7 +9,7 @@ try {
     /** 设置flv通信端口 可以自行修改 默认8501 */
     $server->flvPort = 8501;
     /** hls协议预留端口 8000 */
-    $server->webPort = 8000;
+    $server->webPort = 80;
     /** 启动服务 */
     $server->start();
 }catch (Exception $exception){
