@@ -16,6 +16,7 @@ use Root\HLSDemo;
  */
 trait RtmpPlayerTrait
 {
+    /** 当前播放器是否空闲 */
     public $isPlayerIdling = true;
 
     /**
@@ -27,29 +28,60 @@ trait RtmpPlayerTrait
         return $this->isPlayerIdling;
     }
 
+    /**
+     * 是否播放音乐
+     * @return true
+     * @comment 播放器如果设置了需要播放音乐，那么这里才返回true，否则返回否，不推送音频数据
+     */
     public function isEnableAudio()
     {
         return true;
     }
 
+    /**
+     * 是否播放视频
+     * @return true
+     * @comment 也应该根据播放器的设置来决定是否推送视频数据
+     */
     public function isEnableVideo()
     {
         return true;
     }
 
+    /**
+     * 是否收集连续帧
+     * @return true
+     * @comment 就是是否收集一个可以解码的独立片段，这里必须是true，否则播放器无法立即解码
+     */
     public function isEnableGop()
     {
         return true;
     }
 
+    /**
+     * 是否传输音频帧
+     * @param $status
+     * @return void
+     * @comment  播放器客户端设置此参数，决定是否向此播放器传输音频参数
+     */
     public function setEnableAudio($status)
     {
     }
 
+    /**
+     * 是否传输视频帧
+     * @param $status
+     * @return void
+     */
     public function setEnableVideo($status)
     {
     }
 
+    /**
+     * 是否接收独立的一个可解码的片段
+     * @param $status
+     * @return void
+     */
     public function setEnableGop($status)
     {
     }
@@ -104,7 +136,7 @@ trait RtmpPlayerTrait
         }
 
         //gop 发送
-        /** 连续帧图像 发送 */
+        /** 连续帧图像 发送一个独立的片段帧 */
         if ($this->enableGop) {
             /** 获取连续帧 */
             foreach ($publishStream->getGopCacheQueue() as &$frame) {
@@ -112,7 +144,7 @@ trait RtmpPlayerTrait
                 $this->frameSend($frame);
             }
         }
-        /** 标记当前帧为未播放 */
+        /** 标记当前播放器非空闲状态 */
         $this->isPlayerIdling = false;
         /** 更新播放状态为正在播放 */
         $this->isPlaying = true;

@@ -97,10 +97,12 @@ class RtmpStream extends EventEmitter implements DuplexMediaStreamInterface, Ver
 
     /**
      * @var int 接收数据时的  chunk size
+     * @comment  接收数据时候的切片大小，一个包的长度
      */
     protected    $inChunkSize = 128;
     /**
      * @var int 发送数据时的 chunk size
+     * @comment 发送数据的时候，一个包的大小
      */
     protected $outChunkSize = 60000;
 
@@ -134,6 +136,7 @@ class RtmpStream extends EventEmitter implements DuplexMediaStreamInterface, Ver
     public $appName = '';
     /** 是否接收音频帧 */
     public $isReceiveAudio = true;
+
     /** 是否接收视频帧 */
     public $isReceiveVideo = true;
 
@@ -163,19 +166,29 @@ class RtmpStream extends EventEmitter implements DuplexMediaStreamInterface, Ver
 
     /**
      * @var int 发送ack的长度
+     * @comment ackSize定义了数据分片的最大大小，单位为字节。这个参数是在RTMP连接建立阶段，通过SetChunkSize消息进行配置的。
+     * ackSize指定了每个数据块的最大大小。当数据块的大小超过这个值时，RTMP协议会将数据分割成多个小的数据块进行传输。
+     * 这有助于避免网络拥塞和提高数据传输的可靠性。
+     * 在RTMP协议中，服务器和客户端之间通过确认机制来确保数据的可靠传输。ackSize定义了在数据传输过程中，每隔多大的数据量发送一次确认包（ACK包）。
+     * 合理设置ackSize可以提高数据传输的效率和延迟控制。较大的ackSize可以减少确认包的数量，降低协议开销，但也可能增加数据包的丢失风险。
+     * 较小的ackSize可以提高数据的可靠性，但会增加确认包的数量，增加网络负担。
+     *
+     * 接收或者发送多少个包后校验长度
      */
     protected $ackSize = 0;
 
     /**
      * @var int 当前size统计
+     * 当前的ack位置
      */
     protected $inAckSize = 0;
     /**
      * @var int 上次ack的size
+     * 上一次的ack位置
      */
     protected $inLastAck = 0;
 
-    /** 是否是元数据 */
+    /** 是否接收到媒体控制数据 */
     public $isMetaData = false;
     /**
      * 元数据  配置信息
@@ -201,7 +214,7 @@ class RtmpStream extends EventEmitter implements DuplexMediaStreamInterface, Ver
     public $videoCodec = 0;
     /** 视频解码器名称 */
     public $videoCodecName = '';
-    /** 是否视频avc序列 */
+    /** 是否接收到视频avc解码数据帧 */
     public $isAVCSequence = false;
     /**
      * 视频avc序列包
@@ -217,7 +230,7 @@ class RtmpStream extends EventEmitter implements DuplexMediaStreamInterface, Ver
     public $audioSamplerate = 0;
     /** 音频声道1 */
     public $audioChannels = 1;
-    /** 是否音频序列 */
+    /** 是否接收到音频aac解码数据帧 */
     public $isAACSequence = false;
     /**
      * 音频aac 序列包

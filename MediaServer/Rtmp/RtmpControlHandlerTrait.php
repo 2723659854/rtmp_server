@@ -22,7 +22,7 @@ trait RtmpControlHandlerTrait
         switch ($p->type) {
             /** 设置数据分包大小 */
             case RtmpPacket::TYPE_SET_CHUNK_SIZE:
-                /** 解码，设置分片大小 */
+                /** 解码，设置分片大小，推流端告诉服务器推流数据包的大小 */
                 list(, $this->inChunkSize) = unpack("N", $p->payload);
                 logger()->debug('set inChunkSize ' . $this->inChunkSize);
                 break;

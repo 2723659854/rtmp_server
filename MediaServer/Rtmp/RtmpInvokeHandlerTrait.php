@@ -9,7 +9,103 @@ use \Exception;
 use React\Promise\PromiseInterface;
 
 /**
- * @purpose rtmp命令解析
+ * @purpose rtmp操作命令解析
+ * @comment 这个是处理 连接，播放，推流等命令的
+ *
+ * @note 每一个命令的第二个参数是transId，相当于是请求ID，每一个命令有请求，就有回复，一一对应的。
+ * 1. connect
+ * 功能: 建立客户端与RTMP服务器之间的连接。
+ * 使用场景: 客户端初次连接到服务器时发送。
+ * 参数: 包括应用名称、版本、闪存版本、代理信息等。
+ *  <code>
+ *      ['connect', 1, {
+ *  'app': 'live',
+ *  'flashVer': 'FMLE/3.0 (compatible; FMSc/1.0)',
+ *  'tcUrl': 'rtmp://localhost/live',
+ *  'fpad': false,
+ *  'capabilities': 15,
+ *  'audioCodecs': 4071,
+ *  'videoCodecs': 252,
+ *  'videoFunction': 1
+ *  }]
+ *  </code>
+ * 2. releaseStream
+ * 功能: 请求服务器释放指定的流名。通常在发布流之前使用，以确保没有其他客户端使用该流名。
+ * 使用场景: 在发布流之前，确保流名是可用的。
+ * <code>
+ *     ['releaseStream', 2, null, 'mystream']
+ * </code>
+ * 3. FCPublish
+ * 功能: 通知服务器客户端准备发布一个流。
+ * 使用场景: 在发布流之前，服务器将预先进行相关准备工作。
+ * <code>
+ *     ['FCPublish', 3, null, 'mystream']
+ * </code>
+ * 4. createStream
+ * 功能: 请求服务器创建一个新的流并分配一个流ID。
+ * 使用场景: 在发布或播放流之前使用，以获得一个新的流ID。
+ * 响应: 服务器返回创建的流ID。
+ * <code>
+ *     ['createStream', 4, null]
+ * </code>
+ * 返回响应
+ * <code>
+ *     ['_result', 4, null, 1]  # 返回流ID 1
+ * </code>
+ * 5. publish
+ * 功能: 告诉服务器客户端要开始发布音视频流。
+ * 使用场景: 当客户端准备开始发送音视频数据时使用。
+ * 参数: 流名称、发布类型（如 live, record, append）。
+ * <code>
+ *     ['publish', 5, null, 'mystream', 'live']
+ * </code>
+ * 6. play
+ * 功能: 告诉服务器客户端要播放指定的流。
+ * 使用场景: 当客户端准备接收并播放音视频数据时使用。
+ * 参数: 流名称、开始时间、播放时长等。
+ * <code>
+ *     ['play', 6, null, 'mystream', -2, -1, false]
+ * </code>
+ * 7. pause
+ * 功能: 暂停或恢复播放流。
+ * 使用场景: 客户端需要暂停或恢复正在播放的流时使用。
+ * 参数: 暂停标志（true/false）、暂停时间点。
+ * <code>
+ *     ['pause', 7, null, true, 1234]  # 暂停在1234毫秒
+ * </code>
+ * 8. FCUnpublish
+ * 功能: 通知服务器客户端要停止发布一个流。
+ * 使用场景: 当客户端准备停止发送音视频数据时使用。
+ * <code>
+ *     ['FCUnpublish', 8, null, 'mystream']
+ * </code>
+ * 9. deleteStream
+ * 功能: 请求服务器删除指定的流。
+ * 使用场景: 当客户端不再需要某个流时使用。
+ * <code>
+ *     ['deleteStream', 9, null, 1]  # 删除流ID 1
+ * </code>
+ * 10. closeStream
+ * 功能: 告诉服务器客户端要关闭指定的流。
+ * 使用场景: 客户端完成播放或发布流时使用。
+ * <code>
+ *     ['closeStream', 10, null]
+ * </code>
+ * 11. receiveAudio
+ * 功能: 控制客户端是否接收音频数据。
+ * 使用场景: 客户端希望仅接收视频数据或希望恢复接收音频数据时使用。
+ * 参数: 接收标志（true/false）。
+ * <code>
+ *     ['receiveAudio', 11, null, false]  # 停止接收音频
+ * </code>
+ * 12. receiveVideo
+ * 功能: 控制客户端是否接收视频数据。
+ * 使用场景: 客户端希望仅接收音频数据或希望恢复接收视频数据时使用。
+ * 参数: 接收标志（true/false）。
+ * <code>
+ *     ['receiveVideo', 12, null, true]  # 开始接收视频
+ * </code>
+ *
  */
 trait RtmpInvokeHandlerTrait
 {
@@ -35,7 +131,7 @@ trait RtmpInvokeHandlerTrait
             case 'connect':
                 $this->onConnect($invokeMessage);
                 break;
-                /** 释放流事件 推流端 */
+            /** 释放流事件 推流端 */
             case 'releaseStream':
                 break;
 
@@ -45,42 +141,43 @@ trait RtmpInvokeHandlerTrait
             /** 关闭发布流 */
             case 'FCPublish':
                 break;
-                /** 创建流 推流端 */
+            /** 创建流 推流端 */
             case 'createStream':
                 $this->onCreateStream($invokeMessage);
                 break;
-                /** 发布流媒体 推流端  */
+            /** 发布流媒体 推流端  */
             case 'publish':
                 $this->onPublish($invokeMessage);
                 break;
-                /** 播放 播放端 */
+            /** 播放 播放端 */
             case 'play':
                 $this->onPlay($invokeMessage);
                 break;
-                /** 暂停 推流端 */
+            /** 暂停 推流端 */
             case 'pause':
                 $this->onPause($invokeMessage);
                 break;
-                /** 不发布  推流端 */
+            /** 不发布  推流端 */
             case 'FCUnpublish':
                 break;
-                /** 删除流媒体资源 推流端 */
+            /** 删除流媒体资源 推流端 */
             case 'deleteStream':
                 $this->onDeleteStream($invokeMessage);
                 break;
-                /** 关闭资源 推流端 */
+            /** 关闭资源 推流端 */
             case 'closeStream':
                 $this->onCloseStream();
                 break;
-                /** 接收到音频数据 推流端 */
+            /** 接收到音频数据 推流端 */
             case 'receiveAudio':
                 $this->onReceiveAudio($invokeMessage);
                 break;
-                /** 接收到视频数据 推流端 */
+            /** 接收到视频数据 推流端 */
             case 'receiveVideo':
                 $this->onReceiveVideo($invokeMessage);
                 break;
         }
+        /** 打印命令操作耗时 rtmpInvokeHandler publish use:1.4660358428955ms */
         logger()->info("rtmpInvokeHandler {$invokeMessage['cmd']} use:" . ((microtime(true) - $b) * 1000) . 'ms');
     }
 
@@ -125,7 +222,7 @@ trait RtmpInvokeHandlerTrait
             'last_update' => $this->startTimestamp,
             'bytes' => 0,
         ];
-
+        /** id=3OKLQ5OF ip= app=a args={"app":"a","type":"nonprivate","flashVer":"FMLE\/3.0 (compatible; FMSc\/1.0)","swfUrl":"rtmp:\/\/127.0.0.1:1935\/a","tcUrl":"rtmp:\/\/127.0.0.1:1935\/a"} use:0.36311149597168ms */
         logger()->info("[rtmp connect] id={$this->id} ip={$this->ip} app={$this->appName} args=" . json_encode($invokeMessage['cmdObj']) . " use:" . ((microtime(true) - $b) * 1000) . 'ms');
     }
 
@@ -136,6 +233,7 @@ trait RtmpInvokeHandlerTrait
      */
     public function onCreateStream($invokeMessage)
     {
+        /** id=3OKLQ5OF ip= app=a args={"cmd":"createStream","transId":4} */
         logger()->info("[rtmp create stream] id={$this->id} ip={$this->ip} app={$this->appName} args=" . json_encode($invokeMessage));
         /** 创建资源 */
         $this->respondCreateStream($invokeMessage['transId']);
@@ -150,6 +248,7 @@ trait RtmpInvokeHandlerTrait
     public function onPublish($invokeMessage, $isPromise = false)
     {
         if (!$isPromise) {
+            /** id=3OKLQ5OF ip= app=a args={"cmd":"publish","transId":5,"cmdObj":null,"streamName":"b","type":"live"} */
             //发布一个视频
             logger()->info("[rtmp publish] id={$this->id} ip={$this->ip} app={$this->appName} args=" . json_encode($invokeMessage));
             if (!is_string($invokeMessage['streamName'])) {
@@ -267,16 +366,35 @@ trait RtmpInvokeHandlerTrait
 
     }
 
-    /** 暂停 ，这里没有处理 */
+    /**
+     * 暂停
+     * @param $invokeMessage
+     * @return void
+     */
     public function onPause($invokeMessage)
     {
         //暂停视频
+        /** 如果暂停标识为true，保存暂停时间戳，不再给客户端推送数据，并且将音视频数据帧按客户端保存到缓存中，这里存数据需要谨慎处理，防止内存泄漏，可能需要单独弄一个临时内存来保存 */
+        /** 如果暂停标识为false，则从缓存中取出数据，从时间戳处开始推送数据给客户端 */
     }
 
-    /** 删除，没有处理 */
+    /**
+     * 通知服务器停止推流，释放相关资源
+     * @param $invokeMessage
+     * @return void
+     */
     public function onDeleteStream($invokeMessage)
     {
         //删除流
+        /**
+         * 停止接收推流数据: 停止从该客户端接收推流的音视频数据。
+         *
+         * 释放相关资源: 释放与该推流相关的资源，包括网络连接、缓存、内存等。
+         *
+         * 响应客户端: 向推流客户端发送确认消息，通知成功停止推流。
+         *
+         * 不需要处理播放客户端，播放器继续播放缓存的数据，继续维持链接
+         */
     }
 
     /** 关闭资源 */
@@ -286,15 +404,25 @@ trait RtmpInvokeHandlerTrait
         $this->onDeleteStream(['streamId' => $this->currentPacket->streamId]);
     }
 
-    /** 接收到音频数据 */
+    /**
+     * 是否接收音频数据
+     * @param $invokeMessage
+     * @return void
+     * @comment 播放器告知服务端是否需要接收音频数据
+     */
     public function onReceiveAudio($invokeMessage)
     {
         logger()->info("[rtmp play] receiveAudio=" . ($invokeMessage['bool'] ? 'true' : 'false'));
-        /** 标记是否接收到音频数据 */
+        /** 标记是否接收到音频数据 实际上应该按客户端保存，推送数据的时候应该按客户端判断是否需要发送音频数据 */
         $this->isReceiveAudio = $invokeMessage['bool'];
     }
 
-    /** 接收到视频数据 */
+    /**
+     * 是否接收视频数据
+     * @param $invokeMessage
+     * @return void
+     * @comment  播放器告知服务端是否需要接收视频数据
+     */
     public function onReceiveVideo($invokeMessage)
     {
         logger()->info("[rtmp play] receiveVideo=" . ($invokeMessage['bool'] ? 'true' : 'false'));
@@ -316,7 +444,7 @@ trait RtmpInvokeHandlerTrait
      * @param $sid
      * @param $opt
      * @throws Exception
-     * @comment 初始化消息 推流端发送createStream命令的时候，发invoke
+     * @comment 发送cmd命令回复消息
      */
     public function sendInvokeMessage($sid, $opt)
     {
@@ -337,6 +465,7 @@ trait RtmpInvokeHandlerTrait
      * @param $sid
      * @param $opt
      * @throws Exception
+     * @comment 发送普通数据消息
      */
     public function sendDataMessage($sid, $opt)
     {
@@ -378,6 +507,8 @@ trait RtmpInvokeHandlerTrait
      * 发送权限
      * @param $sid
      * @throws Exception
+     * @comment  RtmpSampleAccess设置为true，表示该流支持随机访问。播放器在播放这样的流时，可以根据用户的操作随意跳转到不同的时间点进行
+     * 播放，而不必从头开始播放或等待加载完整个流。
      */
     public function sendRtmpSampleAccess($sid)
     {
@@ -457,6 +588,7 @@ trait RtmpInvokeHandlerTrait
     /**
      * 发送播放数据
      * @throws Exception
+     * @comment 播放器发送播放命令，服务端接收到这个命令后，调用这个函数发送给播放器，然后开始推送音视频数据
      */
     public function respondPlay()
     {
@@ -466,7 +598,7 @@ trait RtmpInvokeHandlerTrait
         $this->sendStatusMessage($this->playStreamId, 'status', 'NetStream.Play.Reset', 'Playing and resetting stream.');
         /** 开始播放 */
         $this->sendStatusMessage($this->playStreamId, 'status', 'NetStream.Play.Start', 'Started playing stream.');
-        /** 发送权限 */
+        /** 发送权限，可以在任意位置播放 */
         $this->sendRtmpSampleAccess($this->playStreamId);
     }
 

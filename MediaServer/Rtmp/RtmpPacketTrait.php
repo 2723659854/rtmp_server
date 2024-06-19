@@ -92,6 +92,7 @@ trait RtmpPacketTrait
                         return false;
                     }
                 } else {
+                    /** 扩展时间戳：当消息的时间戳超过24位字段的最大值16777215时，扩展时间戳字段用于表示更大的时间戳值 */
                     $extTimestamp = $p->timestamp;
                 }
                 /** 已读数据为0 */
