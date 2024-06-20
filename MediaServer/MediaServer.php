@@ -7,6 +7,7 @@ use Evenement\EventEmitter;
 use MediaServer\MediaReader\AACPacket;
 use MediaServer\MediaReader\AVCPacket;
 use MediaServer\MediaReader\MediaFrame;
+use MediaServer\MediaReader\TsWriter;
 use MediaServer\MediaReader\VideoFrame;
 use MediaServer\PushServer\PlayStreamInterface;
 use MediaServer\PushServer\PublishStreamInterface;
@@ -244,6 +245,8 @@ class MediaServer
             }
         }
 
+
+        //HLSDemo::make($frame,$publisher->getPublishPath());
         /** 获取这个媒体路径下的所有播放设备 */
         foreach (self::getPlayStreams($publisher->getPublishPath()) as $playStream) {
             /** 如果播放器不是空闲状态 */
