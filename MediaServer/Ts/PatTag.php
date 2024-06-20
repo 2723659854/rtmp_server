@@ -80,8 +80,8 @@ class PatTag
 
     /**
      * 添加一个节目到PAT表中。
-     * @param int $programNumber 节目号。
-     * @param int $programMapPid 节目对应的PMT PID。
+     * @param int $programNumber 节目号。与关联PMT中的表ID扩展相关。为NIT分组标识符保留值0。
+     * @param int $programMapPid 节目对应的PMT PID。包含关联PMT的数据包标识符。
      */
     public function addProgram($programNumber, $programMapPid)
     {

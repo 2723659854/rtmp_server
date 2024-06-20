@@ -31,6 +31,8 @@ class PmtTag
     /**
      * Reserved：2位，保留位，固定为 0x03。
      * @var int
+     * Set to 0x07 (all bits on)
+     * Set to 0x0f (all bits on)
      */
     public $reserved = 0x03;
 
@@ -73,6 +75,7 @@ class PmtTag
     /**
      * PCR PID：16位，包含有关节目时钟参考（PCR）的信息。
      * @var int
+     * 包含节目时钟参考的分组标识符，用于提高从节目时间戳导出的流的定时的随机访问精度。如果未使用。则它被设置为0x1FFF（所有位都开启）。
      */
     public $pcrPid = 0;
 
