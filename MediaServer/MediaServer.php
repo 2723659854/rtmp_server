@@ -133,7 +133,7 @@ class MediaServer
         /** 初始化代理客户端 */
         /** 清理当前路径的解码帧 */
         /** 清空网关缓存 */
-        unset(RtmpDemo::$flvClientsInfo[$path],MediaServer::$metaKeyFrame[$path] , MediaServer::$avcKeyFrame[$path] , MediaServer::$aacKeyFrame[$path] , RtmpDemo::$gatewayBuffer[$path]);
+        unset(RtmpDemo::$flvClientsInfo[$path], MediaServer::$metaKeyFrame[$path], MediaServer::$avcKeyFrame[$path], MediaServer::$aacKeyFrame[$path], RtmpDemo::$gatewayBuffer[$path]);
     }
 
     /**
@@ -204,8 +204,15 @@ class MediaServer
 
     }
 
+    public static array $audioSamplerate = [];
+    public static array $audioChannels = [];
+    public static array $videoWidth = [];
+    public static array $videoHeight = [];
+    public static array $videoFps = [];
+
     /** 用於統計是否掉幀 */
     public static int $count = 0;
+
     /**
      * 转发流媒体数据
      * @param $publisher PublishStreamInterface 发布者 可以是音频，可以是视频
@@ -231,9 +238,9 @@ class MediaServer
         ];
 
         /** 给每一个在线的客户端都分发数据，数据隔离，相互不影响，同时防止内存泄漏 */
-        if (isset(RtmpDemo::$flvClientsInfo[$publisher->getPublishPath()])){
-            foreach (RtmpDemo::$flvClientsInfo[$publisher->getPublishPath()] as $index => $client){
-                if (!is_resource($client)){
+        if (isset(RtmpDemo::$flvClientsInfo[$publisher->getPublishPath()])) {
+            foreach (RtmpDemo::$flvClientsInfo[$publisher->getPublishPath()] as $index => $client) {
+                if (!is_resource($client)) {
                     /** 清理客户端缓存 */
                     unset(RtmpDemo::$gatewayBuffer[$index]);
                     /** 清理客户端 */
@@ -246,7 +253,7 @@ class MediaServer
         }
 
 
-        //HLSDemo::make($frame,$publisher->getPublishPath());
+        HLSDemo::make($frame, $publisher->getPublishPath());
         /** 获取这个媒体路径下的所有播放设备 */
         foreach (self::getPlayStreams($publisher->getPublishPath()) as $playStream) {
             /** 如果播放器不是空闲状态 */
@@ -269,7 +276,7 @@ class MediaServer
      * @param string $path
      * @return array 解码帧
      */
-    public static function getKeyFrame(string $path):array
+    public static function getKeyFrame(string $path): array
     {
         if (!self::hasPublishStream($path)) {
             return [];

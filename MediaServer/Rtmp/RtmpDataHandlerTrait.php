@@ -6,6 +6,7 @@ namespace MediaServer\Rtmp;
 
 use MediaServer\MediaReader\MetaDataFrame;
 use \Exception;
+use MediaServer\MediaServer;
 
 /**
  * @purpose 命令处理
@@ -70,6 +71,13 @@ trait RtmpDataHandlerTrait
                     $this->videoHeight = $dataMessage['dataObj']['height'] ?? $this->videoHeight;
                     /** 视频帧率 */
                     $this->videoFps = $dataMessage['dataObj']['framerate'] ?? $this->videoFps;
+
+
+                    MediaServer::$audioSamplerate[$this->publishStreamPath] =  $this->audioSamplerate;
+                    MediaServer::$audioChannels[$this->publishStreamPath] =   $this->audioChannels;
+                    MediaServer::$videoWidth[$this->publishStreamPath] =  $this->videoWidth;
+                    MediaServer::$videoHeight[$this->publishStreamPath] =  $this->videoHeight;
+                    MediaServer::$videoFps[$this->publishStreamPath] =  $this->videoFps;
                 }
                 /** 标记 已设置媒体元素 */
                 $this->isMetaData = true;
