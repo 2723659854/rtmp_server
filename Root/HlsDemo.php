@@ -10,6 +10,8 @@ use MediaServer\MediaServer;
  * Class HlsDemo
  * @package Root
  * @comment hls 协议，现在可以将音频数据写入到ts文件，但是无法被解码。h264写入后无法识别。
+ * @note 但是呢，生成的ts文件的pid是正确的，这也算是一大进步呢。
+ * @note 存在的问题，音频aac无法解码，提示没有设置采样率，但是实际上设置了采样率不生效。视频的h264直接无法识别。
  */
 class HlsDemo
 {
