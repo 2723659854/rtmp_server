@@ -440,8 +440,12 @@ class RtmpDemo
                 $frame = new VideoFrame($frame, $timestamp);
                 /** 保存所有的I帧 */
                 if ($frame->frameType == VideoFrame::VIDEO_FRAME_TYPE_KEY_FRAME){
-                    //var_dump("I帧");
+                    var_dump("I帧");
                     //self::$preKeyFrame[$path][] = $frame;
+
+                    if (!in_array($frame,self::$preKeyFrame[$path]??[])){
+                        self::$preKeyFrame[$path][] = $frame;
+                    }
                 }
             } elseif ($type == MediaFrame::AUDIO_FRAME) {
                 $frame = new AudioFrame($frame, $timestamp);
