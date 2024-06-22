@@ -221,12 +221,13 @@ class MediaServer
      */
     static function publisherOnFrame(MediaFrame $frame, PublishStreamInterface $publisher)
     {
+        $path = $publisher->getPublishPath();
         /** 发送了关键帧之后，将数据发送给连接了网关的客户端 ,发送原始数据 */
         $data = [
             'cmd' => 'frame',
             'socket' => null,
             'data' => [
-                'path' => $publisher->getPublishPath(),
+                'path' => $path,
                 'frame' => $frame->_buffer,
                 'timestamp' => $frame->timestamp ?? 0,
                 'type' => $frame->FRAME_TYPE,
@@ -238,24 +239,28 @@ class MediaServer
         ];
 
         /** 给每一个在线的客户端都分发数据，数据隔离，相互不影响，同时防止内存泄漏 */
-        if (isset(RtmpDemo::$flvClientsInfo[$publisher->getPublishPath()])) {
-            foreach (RtmpDemo::$flvClientsInfo[$publisher->getPublishPath()] as $index => $client) {
+        if (isset(RtmpDemo::$flvClientsInfo[$path])) {
+            foreach (RtmpDemo::$flvClientsInfo[$path] as $index => $client) {
                 if (!is_resource($client)) {
                     /** 清理客户端缓存 */
                     unset(RtmpDemo::$gatewayBuffer[$index]);
                     /** 清理客户端 */
-                    unset(RtmpDemo::$flvClientsInfo[$publisher->getPublishPath()][$index]);
+                    unset(RtmpDemo::$flvClientsInfo[$path][$index]);
                     break;
                 }
                 /** 所有帧全部转发 */
                 RtmpDemo::$gatewayBuffer[$index][] = $data;
+            }
+            /** 所有的客户端都已经下线了 */
+            if (empty(RtmpDemo::$flvClientsInfo[$path])){
+                unset(RtmpDemo::$flvClientsInfo[$path], MediaServer::$metaKeyFrame[$path], MediaServer::$avcKeyFrame[$path], MediaServer::$aacKeyFrame[$path], RtmpDemo::$gatewayBuffer[$path]);
             }
         }
 
 
         //HLSDemo::make($frame, $publisher->getPublishPath());
         /** 获取这个媒体路径下的所有播放设备 */
-        foreach (self::getPlayStreams($publisher->getPublishPath()) as $playStream) {
+        foreach (self::getPlayStreams($path) as $playStream) {
             /** 如果播放器不是空闲状态 */
             if (!$playStream->isPlayerIdling()) {
                 /** 转发数据包给播放器 */

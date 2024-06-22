@@ -442,7 +442,7 @@ class RtmpDemo
                 if ($frame->frameType == VideoFrame::VIDEO_FRAME_TYPE_KEY_FRAME){
                     var_dump("I帧");
                     //self::$preKeyFrame[$path][] = $frame;
-
+                    /** 追加I帧 不然画面接不上 */
                     if (!in_array($frame,self::$preKeyFrame[$path]??[])){
                         self::$preKeyFrame[$path][] = $frame;
                     }
@@ -462,11 +462,13 @@ class RtmpDemo
                     /** 避免重复发送解码帧 */
                     return;
                 }
-
+                /** 首次拉流从服务端传输过来的连续帧 */
                 if ((int)$seq == 3){
                     self::$preKeyFrame[$path][] = $frame;
+                    return;
                 }
             }
+
             /** 处理连续帧，用于解码一个完整的页面 */
             self::addKeyFrames($frame, $path);
             /** 如果客户端多次断开 ，服务端无法给客户端发送数据 */
@@ -489,6 +491,15 @@ class RtmpDemo
                         /** 删除播放器客户端 */
                         unset(self::$playerGroupByPath[$path][$index]);
                     }
+                }
+                /** 当前播放路径已经没有客户端了 ，清理所有缓存，防止内存泄漏 */
+                if (empty(self::$playerGroupByPath[$path])){
+                    /** 清理所有I帧 */
+                    self::$preKeyFrame[$path] = [];
+                    /** 清理连续帧 */
+                    self::$importantFrame[$path] = [];
+                    /** 清理解码帧 */
+                    self::$seqs[$path] = [];
                 }
             }
         }
@@ -542,11 +553,8 @@ class RtmpDemo
                 &&
                 /** 是nalu数据信息，就是媒体信息，表示这是一个独立的片段  */
                 $avcPack->avcPacketType === AVCPacket::AVC_PACKET_TYPE_NALU) {
-                /** 先保存上一个完整的关键帧，用于解码 */
-                //self::$preKeyFrame[$path] =  self::$importantFrame[$path];
                 /** 如果这是一个独立的片段，那么就可以清空前面的连续帧，保存新的关键帧作为连续帧，可以用来解码出一个完整的画面 */
                 self::$importantFrame[$path] = [];
-
             }
 
             /** 如果是关键帧  */
@@ -854,9 +862,9 @@ class RtmpDemo
                 foreach (self::$preKeyFrame[$path] as $frame) {
                     self::frameSend($frame, $client);
                 }
-                var_dump("发送预测帧完成:".$countPreFrame);
+                var_dump("发送前置I帧完成:".$countPreFrame);
             }
-//            var_dump("发送预测帧完成:". $countPreKeyFrame);
+
             /** 发送关键帧I帧给播放器 ，不限定关键帧的数量，有一个就直接*/
             foreach (self::$importantFrame[$path] as $frame) {
                 self::frameSend($frame, $client);
