@@ -489,16 +489,6 @@ class RtmpDemo
                         unset(self::$playerGroupByPath[$path][$index]);
                     }
                 }
-                /** 当前播放路径已经没有客户端了 ，清理所有缓存，防止内存泄漏 */
-                if (empty(self::$playerGroupByPath[$path])){
-                    var_dump("无客户端链接");
-                    /** 清理所有I帧 */
-                    self::$preKeyFrame[$path] = [];
-                    /** 清理连续帧 */
-                    self::$importantFrame[$path] = [];
-                    /** 清理解码帧 */
-                    self::$seqs[$path] = [];
-                }
             }
         }
     }
@@ -551,13 +541,6 @@ class RtmpDemo
                 &&
                 /** 是nalu数据信息，就是媒体信息，表示这是一个独立的片段  */
                 $avcPack->avcPacketType === AVCPacket::AVC_PACKET_TYPE_NALU) {
-                /** 如果这是一个独立的片段，那么就可以清空前面的连续帧，保存新的关键帧作为连续帧，可以用来解码出一个完整的画面 */
-                self::$preKeyFrame[$path] = array_merge(self::$preKeyFrame[$path]??[],self::$importantFrame[$path]??[]);
-                $count = count(self::$preKeyFrame[$path]);
-                /** 保险丝，保证既可以解码图像，又不会内存泄漏 */
-                if ($count > 1000){
-                    self::$preKeyFrame[$path] = array_slice( self::$preKeyFrame[$path],$count - 1000);
-                }
                 /** 格式化连续帧 */
                 self::$importantFrame[$path] = [];
             }
