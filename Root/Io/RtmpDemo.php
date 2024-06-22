@@ -442,8 +442,8 @@ class RtmpDemo
                 if ($frame->frameType == VideoFrame::VIDEO_FRAME_TYPE_KEY_FRAME){
                     var_dump("I帧");
                     //self::$preKeyFrame[$path][] = $frame;
-                    /** 追加I帧 不然画面接不上 */
-                    if (!in_array($frame,self::$preKeyFrame[$path]??[])){
+                    /** 追加I帧 不然画面接不上 不重复添加I帧，不重复添加连续帧 */
+                    if (!in_array($frame,self::$preKeyFrame[$path]??[]) && !in_array($frame,self::$importantFrame[$path]??[])){
                         self::$preKeyFrame[$path][] = $frame;
                     }
                 }
@@ -465,7 +465,7 @@ class RtmpDemo
                 /** 首次拉流从服务端传输过来的连续帧 */
                 if ((int)$seq == 3){
                     self::$preKeyFrame[$path][] = $frame;
-                    return;
+                    //return;
                 }
             }
 
@@ -554,6 +554,11 @@ class RtmpDemo
                 /** 是nalu数据信息，就是媒体信息，表示这是一个独立的片段  */
                 $avcPack->avcPacketType === AVCPacket::AVC_PACKET_TYPE_NALU) {
                 /** 如果这是一个独立的片段，那么就可以清空前面的连续帧，保存新的关键帧作为连续帧，可以用来解码出一个完整的画面 */
+                self::$preKeyFrame[$path] = array_merge(self::$preKeyFrame[$path]??[],self::$importantFrame[$path]??[]);
+                $count = count(self::$preKeyFrame[$path]);
+                if ($count > 1000){
+                    self::$preKeyFrame[$path] = array_slice( self::$preKeyFrame[$path],$count - 500);
+                }
                 self::$importantFrame[$path] = [];
             }
 
