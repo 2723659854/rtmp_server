@@ -440,8 +440,6 @@ class RtmpDemo
                 $frame = new VideoFrame($frame, $timestamp);
                 /** 保存所有的I帧 */
                 if ($frame->frameType == VideoFrame::VIDEO_FRAME_TYPE_KEY_FRAME){
-                    var_dump("I帧");
-                    //self::$preKeyFrame[$path][] = $frame;
                     /** 追加I帧 不然画面接不上 不重复添加I帧，不重复添加连续帧 */
                     if (!in_array($frame,self::$preKeyFrame[$path]??[]) && !in_array($frame,self::$importantFrame[$path]??[])){
                         self::$preKeyFrame[$path][] = $frame;
@@ -465,7 +463,6 @@ class RtmpDemo
                 /** 首次拉流从服务端传输过来的连续帧 */
                 if ((int)$seq == 3){
                     self::$preKeyFrame[$path][] = $frame;
-                    //return;
                 }
             }
 
@@ -494,6 +491,7 @@ class RtmpDemo
                 }
                 /** 当前播放路径已经没有客户端了 ，清理所有缓存，防止内存泄漏 */
                 if (empty(self::$playerGroupByPath[$path])){
+                    var_dump("无客户端链接");
                     /** 清理所有I帧 */
                     self::$preKeyFrame[$path] = [];
                     /** 清理连续帧 */
@@ -556,9 +554,11 @@ class RtmpDemo
                 /** 如果这是一个独立的片段，那么就可以清空前面的连续帧，保存新的关键帧作为连续帧，可以用来解码出一个完整的画面 */
                 self::$preKeyFrame[$path] = array_merge(self::$preKeyFrame[$path]??[],self::$importantFrame[$path]??[]);
                 $count = count(self::$preKeyFrame[$path]);
+                /** 保险丝，保证既可以解码图像，又不会内存泄漏 */
                 if ($count > 1000){
-                    self::$preKeyFrame[$path] = array_slice( self::$preKeyFrame[$path],$count - 500);
+                    self::$preKeyFrame[$path] = array_slice( self::$preKeyFrame[$path],$count - 1000);
                 }
+                /** 格式化连续帧 */
                 self::$importantFrame[$path] = [];
             }
 
