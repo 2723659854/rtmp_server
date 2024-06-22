@@ -281,6 +281,7 @@ class MediaServer
         if (!self::hasPublishStream($path)) {
             return [];
         }
+        $data = [];
         /** 将关键帧转发到网关 必须要先发送关键帧，播放器才可以正常播放 */
         $publishStream = self::getPublishStream($path);
 
@@ -303,6 +304,20 @@ class MediaServer
                     'keyCount' => 0
                 ]
             ];
+            $data[] = [
+                'cmd' => 'frame',
+                'socket' => null,
+                'data' => [
+                    'path' => $path,
+                    'frame' => $frame->_buffer,
+                    'timestamp' => $frame->timestamp ?? 0,
+                    'type' => $frame->FRAME_TYPE,
+                    'important' => 1,
+                    'order' => 3,
+                    /** 检测是否掉帧 */
+                    'keyCount' => 0
+                ]
+            ];
         }
 
         /**
@@ -322,6 +337,20 @@ class MediaServer
                     'type' => $frame->FRAME_TYPE,
                     'important' => 1,
                     'order' => 'avc',
+                    'keyCount' => 0
+                ]
+            ];
+            $data[] = [
+                'cmd' => 'frame',
+                'socket' => null,
+                'data' => [
+                    'path' => $path,
+                    'frame' => $frame->_buffer,
+                    'timestamp' => $frame->timestamp ?? 0,
+                    'type' => $frame->FRAME_TYPE,
+                    'important' => 1,
+                    'order' => 3,
+                    /** 检测是否掉帧 */
                     'keyCount' => 0
                 ]
             ];
@@ -348,8 +377,41 @@ class MediaServer
                     'keyCount' => 0
                 ]
             ];
+            $data[] = [
+                'cmd' => 'frame',
+                'socket' => null,
+                'data' => [
+                    'path' => $path,
+                    'frame' => $frame->_buffer,
+                    'timestamp' => $frame->timestamp ?? 0,
+                    'type' => $frame->FRAME_TYPE,
+                    'important' => 1,
+                    'order' => 3,
+                    /** 检测是否掉帧 */
+                    'keyCount' => 0
+                ]
+            ];
         }
-        return [];
+
+        /** 一个独立的画面 */
+        foreach ($publishStream->getGopCacheQueue() as $frame) {
+            /** 发送 */
+            $data[] = [
+                'cmd' => 'frame',
+                'socket' => null,
+                'data' => [
+                    'path' => $path,
+                    'frame' => $frame->_buffer,
+                    'timestamp' => $frame->timestamp ?? 0,
+                    'type' => $frame->FRAME_TYPE,
+                    'important' => 1,
+                    'order' => 3,
+                    /** 检测是否掉帧 */
+                    'keyCount' => 0
+                ]
+            ];
+        }
+        return $data ;
     }
 
 

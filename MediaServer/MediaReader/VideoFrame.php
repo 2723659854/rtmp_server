@@ -42,7 +42,7 @@ class VideoFrame extends BinaryStream implements MediaFrame
     const VIDEO_FRAME_TYPE_INTER_FRAME = 2;
 
     /** 一次性預測幀（Disposable Inter Frame）是一種在解碼器端處理時可以丟棄的預測幀。它們通常用於提高視頻編碼的效率，但不是解碼過程的必要部分。
-     * 這種幀類型在某些編碼器中使用，以改進視頻流的壓縮比率。
+     * 這種幀類型在某些編碼器中使用，以改進視頻流的壓縮比率。可丢弃
      */
     const VIDEO_FRAME_TYPE_DISPOSABLE_INTER_FRAME = 3;
 

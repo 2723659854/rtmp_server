@@ -26,7 +26,6 @@ trait RtmpVideoHandlerTrait
         $p = $this->currentPacket;
         /** 将视频数据存入视频帧包 */
         $videoFrame = new VideoFrame($p->payload, $p->clock);
-
         /** 获取视频编码 */
         if ($this->videoCodec == 0) {
             /** 获取解码器 */

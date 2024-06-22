@@ -425,28 +425,24 @@ class RtmpDemo
             self::$readBuffer = substr(self::$readBuffer, $pos + 4);
             /** 拆分为数组 */
             $array = explode("\r\n", $content);
-
             $type = ($array[0]);
             $timestamp = ($array[1]);
-            //var_dump($timestamp);
             $important = $array[2];
             $count = $array[3];
-
             $path = $array[4];
             $seq = $array[5];
             $frame = $array[6];
-//            /** 检测是否掉帧 ，从理论上来说，  */
-//            if ((self::$lastCount[$path] + 1) != $count) {
-//                var_dump("掉帧" . (self::$lastCount[$path] + 1));
-//            }
-//            /** 记录当前接受的帧 */
-//            self::$lastCount[$path] = $count;
             /** 因为转发有延迟，所以使用新的时间戳 */
-            //$timestamp = timestamp();
+
             //$string = $type . "\r\n" . $timestamp . "\r\n" . $important . "\r\n" . $count . "\r\n" . $path . "\r\n" . $seq . "\r\n" . $frame . "\r\n\r\n";
             /** 目前播放器可以拉流，缓冲数据，无法播放，不知道是什么原因 */
             if ($type == MediaFrame::VIDEO_FRAME) {
                 $frame = new VideoFrame($frame, $timestamp);
+                /** 保存所有的I帧 */
+                if ($frame->frameType == VideoFrame::VIDEO_FRAME_TYPE_KEY_FRAME){
+                    //var_dump("I帧");
+                    //self::$preKeyFrame[$path][] = $frame;
+                }
             } elseif ($type == MediaFrame::AUDIO_FRAME) {
                 $frame = new AudioFrame($frame, $timestamp);
             } else {
@@ -455,11 +451,16 @@ class RtmpDemo
 
             /** 处理解码帧 */
             if ($important) {
+
                 /** 保存解码帧 ，此时服务端发送的解码帧是meta,avc,aac */
-                if ((int)$seq != 4) {
+                if (in_array($seq,['avc','aac','meta'])) {
                     self::$seqs[$path][$seq] = $frame;
                     /** 避免重复发送解码帧 */
                     return;
+                }
+
+                if ((int)$seq == 3){
+                    self::$preKeyFrame[$path][] = $frame;
                 }
             }
             /** 处理连续帧，用于解码一个完整的页面 */
@@ -529,6 +530,7 @@ class RtmpDemo
      */
     public static function addKeyFrames(MediaFrame $frame, string $path)
     {
+
         if ($frame->FRAME_TYPE == MediaFrame::VIDEO_FRAME) {
             $avcPack = $frame->getAVCPacket();
             /** 如果是关键帧I帧 */
@@ -537,9 +539,10 @@ class RtmpDemo
                 /** 是nalu数据信息，就是媒体信息，表示这是一个独立的片段  */
                 $avcPack->avcPacketType === AVCPacket::AVC_PACKET_TYPE_NALU) {
                 /** 先保存上一个完整的关键帧，用于解码 */
-                self::$preKeyFrame[$path] =  self::$importantFrame[$path];
+                //self::$preKeyFrame[$path] =  self::$importantFrame[$path];
                 /** 如果这是一个独立的片段，那么就可以清空前面的连续帧，保存新的关键帧作为连续帧，可以用来解码出一个完整的画面 */
                 self::$importantFrame[$path] = [];
+
             }
 
             /** 如果是关键帧  */
@@ -552,6 +555,7 @@ class RtmpDemo
                 /** 将包投递到队列中，其他的关键帧全部保存 */
                 self::$importantFrame[$path][] = $frame;
             }
+
         }
 
         if ($frame->FRAME_TYPE == MediaFrame::AUDIO_FRAME) {
@@ -565,6 +569,7 @@ class RtmpDemo
                 self::$importantFrame[$path][] = $frame;
             }
         }
+
     }
 
 
@@ -745,7 +750,6 @@ class RtmpDemo
                         $path = $buffer['data']['path'];
                         $count = $buffer['data']['keyCount'];
                         $seq = $buffer['data']['order'];
-
                         /** 使用http之类的文本分隔符 ，一整个报文之间用换行符分割  */
                         $string = $type . "\r\n" . $timestamp . "\r\n" . $important . "\r\n" . $count . "\r\n" . $path . "\r\n" . $seq . "\r\n" . $data . "\r\n\r\n";
                         /** 他么的这数据也太长了，将数据切片发送 */
