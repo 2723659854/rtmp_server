@@ -233,7 +233,7 @@ class MediaServer
                 'important' => 0,
                 'order' => 4,
                 /** 检测是否掉帧 */
-                'keyCount' => self::$count++
+                'keyCount' => 0
             ]
         ];
 
@@ -253,7 +253,7 @@ class MediaServer
         }
 
 
-        HLSDemo::make($frame, $publisher->getPublishPath());
+        //HLSDemo::make($frame, $publisher->getPublishPath());
         /** 获取这个媒体路径下的所有播放设备 */
         foreach (self::getPlayStreams($publisher->getPublishPath()) as $playStream) {
             /** 如果播放器不是空闲状态 */

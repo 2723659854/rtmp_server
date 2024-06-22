@@ -435,12 +435,12 @@ class RtmpDemo
             $path = $array[4];
             $seq = $array[5];
             $frame = $array[6];
-            /** 检测是否掉帧 ，从理论上来说，  */
-            if ((self::$lastCount[$path] + 1) != $count) {
-                var_dump("掉帧" . (self::$lastCount[$path] + 1));
-            }
-            /** 记录当前接受的帧 */
-            self::$lastCount[$path] = $count;
+//            /** 检测是否掉帧 ，从理论上来说，  */
+//            if ((self::$lastCount[$path] + 1) != $count) {
+//                var_dump("掉帧" . (self::$lastCount[$path] + 1));
+//            }
+//            /** 记录当前接受的帧 */
+//            self::$lastCount[$path] = $count;
             /** 因为转发有延迟，所以使用新的时间戳 */
             //$timestamp = timestamp();
             //$string = $type . "\r\n" . $timestamp . "\r\n" . $important . "\r\n" . $count . "\r\n" . $path . "\r\n" . $seq . "\r\n" . $frame . "\r\n\r\n";
@@ -519,6 +519,8 @@ class RtmpDemo
         }
     }
 
+    /** 前一个完整的关键帧 ，用于解码，防止当前页面因为没有完整的关键帧而无法解码 */
+    public static array $preKeyFrame = [];
     /**
      * 追加连续帧，用于解码成一个完整的画面
      * @param MediaFrame $frame
@@ -534,6 +536,8 @@ class RtmpDemo
                 &&
                 /** 是nalu数据信息，就是媒体信息，表示这是一个独立的片段  */
                 $avcPack->avcPacketType === AVCPacket::AVC_PACKET_TYPE_NALU) {
+                /** 先保存上一个完整的关键帧，用于解码 */
+                self::$preKeyFrame[$path] =  self::$importantFrame[$path];
                 /** 如果这是一个独立的片段，那么就可以清空前面的连续帧，保存新的关键帧作为连续帧，可以用来解码出一个完整的画面 */
                 self::$importantFrame[$path] = [];
             }
@@ -836,6 +840,15 @@ class RtmpDemo
             self::frameSend(self::$seqs[$path]['avc'], $client);
             self::frameSend(self::$seqs[$path]['aac'], $client);
             var_dump("发送解码命令完成" . count(self::$seqs[$path]));
+
+            if(isset(self::$preKeyFrame[$path])) {
+                $countPreFrame = count(self::$preKeyFrame[$path]);
+                foreach (self::$preKeyFrame[$path] as $frame) {
+                    self::frameSend($frame, $client);
+                }
+                var_dump("发送预测帧完成:".$countPreFrame);
+            }
+//            var_dump("发送预测帧完成:". $countPreKeyFrame);
             /** 发送关键帧I帧给播放器 ，不限定关键帧的数量，有一个就直接*/
             foreach (self::$importantFrame[$path] as $frame) {
                 self::frameSend($frame, $client);
