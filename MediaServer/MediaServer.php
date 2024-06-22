@@ -309,20 +309,7 @@ class MediaServer
                     'keyCount' => 0
                 ]
             ];
-            $data[] = [
-                'cmd' => 'frame',
-                'socket' => null,
-                'data' => [
-                    'path' => $path,
-                    'frame' => $frame->_buffer,
-                    'timestamp' => $frame->timestamp ?? 0,
-                    'type' => $frame->FRAME_TYPE,
-                    'important' => 1,
-                    'order' => 3,
-                    /** 检测是否掉帧 */
-                    'keyCount' => 0
-                ]
-            ];
+
         }
 
         /**
@@ -345,20 +332,7 @@ class MediaServer
                     'keyCount' => 0
                 ]
             ];
-            $data[] = [
-                'cmd' => 'frame',
-                'socket' => null,
-                'data' => [
-                    'path' => $path,
-                    'frame' => $frame->_buffer,
-                    'timestamp' => $frame->timestamp ?? 0,
-                    'type' => $frame->FRAME_TYPE,
-                    'important' => 1,
-                    'order' => 3,
-                    /** 检测是否掉帧 */
-                    'keyCount' => 0
-                ]
-            ];
+
         }
 
 
@@ -382,24 +356,11 @@ class MediaServer
                     'keyCount' => 0
                 ]
             ];
-            $data[] = [
-                'cmd' => 'frame',
-                'socket' => null,
-                'data' => [
-                    'path' => $path,
-                    'frame' => $frame->_buffer,
-                    'timestamp' => $frame->timestamp ?? 0,
-                    'type' => $frame->FRAME_TYPE,
-                    'important' => 1,
-                    'order' => 3,
-                    /** 检测是否掉帧 */
-                    'keyCount' => 0
-                ]
-            ];
         }
-
+        $gopQueFrames = $publishStream->getGopCacheQueue();
+        $all = count($gopQueFrames);
         /** 一个独立的画面 */
-        foreach ($publishStream->getGopCacheQueue() as $frame) {
+        foreach ($gopQueFrames as $key => $frame) {
             /** 发送 */
             $data[] = [
                 'cmd' => 'frame',
@@ -410,12 +371,13 @@ class MediaServer
                     'timestamp' => $frame->timestamp ?? 0,
                     'type' => $frame->FRAME_TYPE,
                     'important' => 1,
-                    'order' => 3,
+                    'order' => 'gop',
                     /** 检测是否掉帧 */
-                    'keyCount' => 0
+                    'keyCount' => $all
                 ]
             ];
         }
+        var_dump(count($data));
         return $data ;
     }
 

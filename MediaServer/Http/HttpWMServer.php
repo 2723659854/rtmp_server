@@ -300,8 +300,8 @@ class HttpWMServer
             return false;
         } else {
             list(, $flvPath) = $matches;
-            /** 通知网关服务端更新关键帧，同时服务端按路径保存客户端，提高服务端转发数据的效率 */
-            RtmpDemo::$client2ServerData[]= ['client'=>$request->connection->getSocket(),'path'=>$flvPath];
+            /** 通知网关服务端更新关键帧，同时服务端按路径保存客户端，提高服务端转发数据的效率 ，请求登录服务器 */
+            RtmpDemo::$client2ServerData[]= ['client'=>$request->connection->getSocket(),'path'=>$flvPath,'type'=>'login'];
             return true;
         }
     }
