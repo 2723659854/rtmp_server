@@ -46,6 +46,7 @@ class AACPacket
     public function __construct($stream)
     {
         $this->stream=$stream;
+
         /** 包类型 读取一个字节 */
         $this->aacPacketType=$stream->readTinyInt();
 

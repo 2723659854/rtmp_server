@@ -343,6 +343,89 @@ class HlsDemo
         }
     }
 
+    public static function hexPts($dpvalue) {
+        // 创建一个长度为5的数组，初始化所有元素为0
+        $dphex = array_fill(0, 5, 0);
+
+        // 计算第一个字节
+        $dphex[0] = 0x31 | (($dpvalue >> 29) & 0xFF);
+
+        // 计算 hp 和 he
+        $hp = ((($dpvalue >> 15) & 0x7FFF) * 2) + 1;
+        $he = ((($dpvalue & 0x7FFF) * 2) + 1);
+
+        // 将 hp 和 he 的高8位和低8位分开
+        $dphex[1] = ($hp >> 8) & 0xFF;
+        $dphex[2] = $hp & 0xFF;
+        $dphex[3] = ($he >> 8) & 0xFF;
+        $dphex[4] = $he & 0xFF;
+
+        return $dphex;
+    }
+
+
+    public static function hexDts($dpvalue) {
+        // 创建一个长度为5的数组，初始化所有元素为0
+        $dphex = array_fill(0, 5, 0);
+
+        // 计算第一个字节
+        $dphex[0] = 0x11 | (($dpvalue >> 29) & 0xFF);
+
+        // 计算 hp 和 he
+        $hp = ((($dpvalue >> 15) & 0x7FFF) * 2) + 1;
+        $he = ((($dpvalue & 0x7FFF) * 2) + 1);
+
+        // 将 hp 和 he 的高8位和低8位分开
+        $dphex[1] = ($hp >> 8) & 0xFF;
+        $dphex[2] = $hp & 0xFF;
+        $dphex[3] = ($he >> 8) & 0xFF;
+        $dphex[4] = $he & 0xFF;
+
+        return $dphex;
+    }
+
+    public static function hexPcr($dts) {
+        // 创建一个长度为7的数组，初始化所有元素为0
+        $adapt = array_fill(0, 7, 0);
+
+        // 计算每个字节
+        $adapt[0] = 0x50;
+        $adapt[1] = ($dts >> 25) & 0xFF;
+        $adapt[2] = ($dts >> 17) & 0xFF;
+        $adapt[3] = ($dts >> 9) & 0xFF;
+        $adapt[4] = ($dts >> 1) & 0xFF;
+        $adapt[5] = (($dts & 0x1) << 7) | 0x7E;
+
+        return $adapt;
+    }
+
+    public static function PES($mtype, $pts, $dts) {
+        // 初始化一个长度为9的数组
+        $header = array_fill(0, 9, 0);
+
+        // 复制 {0, 0, 1} 到 header[0:3]
+        $header[0] = 0;
+        $header[1] = 0;
+        $header[2] = 1;
+        $header[3] = $mtype;
+        $header[6] = 0x80;
+
+        if ($pts > 0) {
+            if ($dts > 0) {
+                $header[7] = 0xc0;
+                $header[8] = 0x0a;
+                $header = array_merge($header, self::hexPts($pts));
+                $header = array_merge($header, self::hexDts($dts));
+            } else {
+                $header[7] = 0x80;
+                $header[8] = 0x05;
+                $header = array_merge($header, self::hexPts($pts));
+            }
+        }
+
+        return $header;
+    }
+
 
     private static function createAacPesPayload(string $payload, int $pts, int $dts, int $audioCodec, int $audioSampleRate, int $audioChannelConfig): string
     {

@@ -72,7 +72,6 @@ class AudioFrame extends BinaryStream implements MediaFrame
         $this->timestamp = $timestamp;
         /** 第一个字节 一个字节占8个bits */
         $firstByte = $this->readTinyInt();
-
         /** 右移操作的结果是一个新的整数值，这个值的二进制表示从右边数起第4位到最右边的位数被移出，左边空出的位用0填充。
         例如，如果 $firstByte 的二进制表示是 11011010，那么 $firstByte >> 4 的结果是 00001101。 */
 

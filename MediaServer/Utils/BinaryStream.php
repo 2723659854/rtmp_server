@@ -20,6 +20,7 @@ class BinaryStream
     public function __construct($data = "")
     {
         $this->_data = $data;
+
     }
 
     /**
