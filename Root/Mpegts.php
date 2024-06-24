@@ -5,6 +5,7 @@ namespace Root;
 use MediaServer\MediaReader\AudioFrame;
 use MediaServer\MediaReader\AVCPacket;
 use MediaServer\MediaReader\MediaFrame;
+use MediaServer\MediaReader\VideoFrame;
 use Root\Cache;
 
 class Mpegts
@@ -96,6 +97,7 @@ class Mpegts
      * 创建sdt内容
      * @param $fileHandle
      * @return void
+     * @comment 描述
      */
     public static function SDT($fileHandle)
     {
@@ -226,6 +228,12 @@ class Mpegts
         fwrite($fileHandle, pack('C*', ...$bt));
     }
 
+    /**
+     * 计算pts
+     * @param $dpvalue
+     * @return array
+     * @comment 播放时间戳
+     */
     public static function hexPts($dpvalue)
     {
         // 创建一个长度为5的数组，初始化所有元素为0
@@ -248,6 +256,12 @@ class Mpegts
     }
 
 
+    /**
+     * 计算dts
+     * @param $dpvalue
+     * @return array
+     * @comment 解码时间戳
+     */
     public static function hexDts($dpvalue)
     {
         // 创建一个长度为5的数组，初始化所有元素为0
@@ -269,6 +283,12 @@ class Mpegts
         return $dphex;
     }
 
+    /**
+     * 计算pcr
+     * @param $dts
+     * @return array
+     * @comment 时钟用于同步音频和视频
+     */
     public static function hexPcr($dts)
     {
         // 创建一个长度为7的数组，初始化所有元素为0
@@ -285,6 +305,13 @@ class Mpegts
         return $adapt;
     }
 
+    /**
+     * 生成pes表头
+     * @param $mtype
+     * @param $pts
+     * @param $dts
+     * @return array
+     */
     public static function PES($mtype, $pts, $dts)
     {
         // 初始化一个长度为9的数组
@@ -313,19 +340,23 @@ class Mpegts
         return $header;
     }
 
-    /* 视频流ID */
+    /** 视频流ID */
     public static $VideoMark = 0xe0;
 
-    /* 音频流ID */
+    /** 音频流ID */
     public static $AudioMark = 0xc0;
 
+    /** 切片间隔时间 */
     public static $duration = 3000;
 
-    public static $fileHandle ;
+    /** ts操作句柄 */
+    public static $fileHandle;
 
+    /** 播放索引列表 */
     public static $index = [];
-
+    /** 上一次切片时间 */
     public static $lastCutTime = null;
+
     /**
      * 协议入口
      * @param MediaFrame $frame
@@ -333,131 +364,41 @@ class Mpegts
      */
     public static function make(MediaFrame $frame, string $playStreamPath)
     {
+        /** hls不需要Meta数据包 */
         if ($frame->FRAME_TYPE == MediaFrame::META_FRAME) {
             return;
         }
-
         /** ts存放路径 */
         $outputDir = app_path($playStreamPath);
         /** 当前时间 */
         $nowTime = $frame->timestamp;
-        /** 媒体数据key */
-        $mediaKey = $playStreamPath . '_media';
-        /** 切片操作时间key */
-        $lastCutTimeKey = $playStreamPath . '_time';
-        /** 切片目录key */
-        $tsFilesKey = $playStreamPath . '_ts';
-        /** 获取所有ts目录 */
-        $tsFiles = self::$index;
-        /** 生成ts名称 */
-        $tsFile = 'segment' . count($tsFiles) . '.ts';
-
-        /** ts存放路径 */
-        $tsFileName = $outputDir . '/' . $tsFile;
-        /** 打开ts文件 */
-        self::$fileHandle = @fopen($tsFileName, 'wb+');
         /** 获取最近一次切片时间 */
-       if (!self::$lastCutTime){
-           self::$lastCutTime = $nowTime;
-       }
-
-        /** 原始数据 使用字符串的方式读取 */
-        $buffer = str_split($frame->_data);
-
-
-
+        if (!self::$lastCutTime) {
+            self::$lastCutTime = $nowTime;
+        }
         /** 音频 */
         if ($frame->FRAME_TYPE == MediaFrame::AUDIO_FRAME) {
-            if ($frame->soundFormat != AudioFrame::SOUND_FORMAT_AAC) {
-                var_dump("不是aac编码");
-            } else {
-                $first = ord($buffer[1]);
-                /** 原始数据 */
-                if ($first == 1) {
-                    $tagData = array_slice($buffer, 2);
-                    $adtsHeader = [0xff, 0xf1, 0x4c, 0x80, 0x00, 0x00, 0xfc];
-
-                    $tagDataLength = count($tagData);
-                    $adtsLen = (($tagDataLength + 7) << 5) | 0x1f;
-                    $adtsHeader[4] = ($adtsLen >> 8) & 0xFF; // 高位
-                    $adtsHeader[5] = $adtsLen & 0xFF;        // 低位
-                    $adts = self::push($adtsHeader, $tagData);
-
-                    $dts = $frame->dts;
-                    $pts = $dts * 90;
-
-                    $pes = self::PES(self::$AudioMark, $pts, 0);
-                    self::toPack(self::$AudioMark, self::push($pes, $adts), $dts);
-                }
-            }
+            self::handleAudio($frame);
         }
-
         /** 视频 */
-        if ($frame->FRAME_TYPE == MediaFrame::VIDEO_FRAME){
-            $avc = $frame->getAVCPacket();
-            $avcPacketType = $avc->avcPacketType;
-            $compositionTime = $avc->compositionTime;
-
-            $nalu = [];
-            /** avc配置头 */
-            if ($avcPacketType == AVCPacket::AVC_PACKET_TYPE_SEQUENCE_HEADER){
-
-                // 计算 sps 的长度
-                $spsLen = unpack("n", $buffer[11].$buffer[12])[1];
-                /* 获取sps数据 */
-                //sps := tagData[13 : 13+spsLen];
-
-                $sps = [];
-                for ($i=13;$i<13+$spsLen;$i++){
-                    $sps[] = $buffer[$i];
-                }
-                /* 组装解码数据 */
-                $spsnalu = self::push([0,0,0,1],$sps);
-
-                $nalu = self::push($nalu,$spsnalu);
-
-                /* 获取pps */
-                //ppsLen := int(binary.BigEndian.Uint16(tagData[14+spsLen : 16+spsLen]))
-                $ppsLen = unpack('n',implode('',array_slice($buffer,14+$spsLen,2)))[1];
-		        /* 获取pps的数据 */
-		        //pps := tagData[16+spsLen : 16+spsLen+ppsLen]
-                $pps = [];
-                for ($i = 16+$spsLen;$i<(16+$spsLen+$ppsLen);$i++){
-                    $pps[] = $buffer[$i];
-                }
-		        /* 组装pps */
-		        //ppsnalu := append([]byte{0, 0, 0, 1}, pps...)
-                $ppsnalu = self::push([0,0,0,1],$pps);
-		            /* 将pps追加到nalu */
-		            //nalu = append(nalu, ppsnalu...)
-                $nalu = self::push($nalu,$ppsnalu);
-
-            }elseif($avcPacketType == AVCPacket::AVC_PACKET_TYPE_NALU){
-               /** 视频原始数据 */
-                $readed = 5;
-                while(count($buffer)>($readed + 5)){
-                    $readleng = unpack("N",implode('',array_slice($buffer,$readed,4)))[1];
-                    $readed +=4;
-                    /** 追加头*/
-                    $nalu = self::push($nalu,[0,0,0,1]);
-                    $nalu = self::push($nalu,array_slice($buffer,$readed,$readed+$readleng));
-                    $readed += $readleng;
-                }
-            }
-
-            $dts = $frame->timestamp * 90;
-            $pts = $dts + $compositionTime * 90;
-            $pes = self::PES(self::$VideoMark,$pts,$dts);
-            self::toPack(self::$VideoMark,self::push($pes,$nalu),$dts);
+        if ($frame->FRAME_TYPE == MediaFrame::VIDEO_FRAME) {
+            self::handleVideo($frame);
         }
-
-
         /** 比较当前时间和最近一次切片操作时间 若超过切片时间，则开始本次切片  */
         if (($nowTime - self::$lastCutTime) >= self::$duration) {
             /** 获取所有媒体数据 */
             $mediaData = self::$queue;
-            /** 清空 */
-            self::$queue = [];
+            /** 清空，把视频解码帧写进去，确保每一个ts文件都有视频解码帧 */
+            self::$queue = [self::$avcSeqFrame];
+            /** 获取所有ts目录 */
+            $tsFiles = self::$index;
+            /** 生成ts名称 */
+            $tsFile = 'segment' . count($tsFiles) . '.ts';
+            /** ts存放路径 */
+            $tsFileName = $outputDir . '/' . $tsFile;
+            /** 打开ts文件 */
+            self::$fileHandle = @fopen($tsFileName, 'wb+');
+            /** 更新上一次操作时间 */
             self::$lastCutTime = $nowTime;
             /** 写入sdt */
             self::SDT(self::$fileHandle);
@@ -465,24 +406,125 @@ class Mpegts
             self::PAT(self::$fileHandle);
             /** 写入pmt */
             self::PMT(self::$fileHandle);
-
-            foreach ($mediaData as $data){
-                $string = implode('',array_values($data));
-                fwrite(self::$fileHandle,$string);
+            /** 写入音视频数据到ts文件 */
+            foreach ($mediaData as $data) {
+                $string = implode('', array_values($data));
+                fwrite(self::$fileHandle, $string);
             }
-
+            /** 关闭*/
             fclose(self::$fileHandle);
             /** 将ts文件追加到目录 */
             $tsFiles[] = $tsFile;
             /** 生成索引文件 */
             self::generateM3U8($tsFiles, $outputDir);
             /** 将目录重新存入到缓存 */
-            self::$index[]=$tsFile;
+            self::$index[] = $tsFile;
         } else {
             /** 否则不操作 */
             return;
         }
 
+    }
+
+    /** avc解码帧 */
+    public static $avcSeqFrame = null;
+
+    /**
+     * 处理视频数据包
+     * @param VideoFrame $frame
+     */
+    public static function handleVideo(VideoFrame $frame)
+    {
+        /** 原始数据 使用字符串的方式读取 */
+        $buffer = str_split($frame->_data);
+        /** avc数据包 */
+        $avc = $frame->getAVCPacket();
+        /** avc数据包类型 */
+        $avcPacketType = $avc->avcPacketType;
+        /** 校正时间戳 */
+        $compositionTime = $avc->compositionTime;
+
+        $nalu = [];
+        /** avc配置头 */
+        if ($avcPacketType == AVCPacket::AVC_PACKET_TYPE_SEQUENCE_HEADER) {
+            /** 先保存解码帧 */
+            self::$avcSeqFrame = $frame;
+            // 计算 sps 的长度
+            $spsLen = unpack("n", $buffer[11] . $buffer[12])[1];
+            /* 获取sps数据 */
+            //sps := tagData[13 : 13+spsLen];
+
+            $sps = [];
+            for ($i = 13; $i < 13 + $spsLen; $i++) {
+                $sps[] = $buffer[$i];
+            }
+            /* 组装解码数据 */
+            $spsnalu = self::push([0, 0, 0, 1], $sps);
+
+            $nalu = self::push($nalu, $spsnalu);
+
+            /* 获取pps */
+            //ppsLen := int(binary.BigEndian.Uint16(tagData[14+spsLen : 16+spsLen]))
+            $ppsLen = unpack('n', implode('', array_slice($buffer, 14 + $spsLen, 2)))[1];
+            /* 获取pps的数据 */
+            //pps := tagData[16+spsLen : 16+spsLen+ppsLen]
+            $pps = [];
+            for ($i = 16 + $spsLen; $i < (16 + $spsLen + $ppsLen); $i++) {
+                $pps[] = $buffer[$i];
+            }
+            /* 组装pps */
+            //ppsnalu := append([]byte{0, 0, 0, 1}, pps...)
+            $ppsnalu = self::push([0, 0, 0, 1], $pps);
+            /* 将pps追加到nalu */
+            //nalu = append(nalu, ppsnalu...)
+            $nalu = self::push($nalu, $ppsnalu);
+
+        } elseif ($avcPacketType == AVCPacket::AVC_PACKET_TYPE_NALU) {
+            /** 视频原始数据 */
+            $readed = 5;
+            while (count($buffer) > ($readed + 5)) {
+                $readleng = unpack("N", implode('', array_slice($buffer, $readed, 4)))[1];
+                $readed += 4;
+                /** 追加头*/
+                $nalu = self::push($nalu, [0, 0, 0, 1]);
+                $nalu = self::push($nalu, array_slice($buffer, $readed, $readed + $readleng));
+                $readed += $readleng;
+            }
+        }
+
+        $dts = $frame->timestamp * 90;
+        $pts = $dts + $compositionTime * 90;
+        $pes = self::PES(self::$VideoMark, $pts, $dts);
+        self::toPack(self::$VideoMark, self::push($pes, $nalu), $dts);
+    }
+
+    /** 处理音频数据 */
+    public static function handleAudio(AudioFrame $frame)
+    {
+        /** 原始数据 使用字符串的方式读取 */
+        $buffer = str_split($frame->_data);
+        if ($frame->soundFormat != AudioFrame::SOUND_FORMAT_AAC) {
+            var_dump("不是aac编码");
+        } else {
+            $first = ord($buffer[1]);
+            /** 原始数据 */
+            if ($first == 1) {
+                $tagData = array_slice($buffer, 2);
+                $adtsHeader = [0xff, 0xf1, 0x4c, 0x80, 0x00, 0x00, 0xfc];
+
+                $tagDataLength = count($tagData);
+                $adtsLen = (($tagDataLength + 7) << 5) | 0x1f;
+                $adtsHeader[4] = ($adtsLen >> 8) & 0xFF; // 高位
+                $adtsHeader[5] = $adtsLen & 0xFF;        // 低位
+                $adts = self::push($adtsHeader, $tagData);
+
+                $dts = $frame->dts;
+                $pts = $dts * 90;
+
+                $pes = self::PES(self::$AudioMark, $pts, 0);
+                self::toPack(self::$AudioMark, self::push($pes, $adts), $dts);
+            }
+        }
     }
 
     /**
@@ -544,10 +586,10 @@ class Mpegts
                 }
                 /* 将pes所有内容，复制到cpack包的非填充位 */
                 for ($i = $fillLen + 5; $i < 188; $i++) {
-                    if (!isset($pes[$i-5])){
+                    if (!isset($pes[$i - 5])) {
                         continue;
                     }
-                    $cPack[$i] = $pes[$i-5];
+                    $cPack[$i] = $pes[$i - 5];
                 }
                 /* 清空切片 */
                 $pes = array_slice($pes, $fillLen);
@@ -585,9 +627,9 @@ class Mpegts
     /** 缓存 */
     public static $queue = [];
 
-
+    /** 视频帧计数器 */
     public static $VideoContinuty = 0;
-
+    /** 音频帧计数器 */
     public static $AudioContinuty = 0;
 
     /**
