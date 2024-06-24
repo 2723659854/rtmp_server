@@ -3,7 +3,9 @@
 namespace Root;
 
 use MediaServer\MediaReader\AudioFrame;
+use MediaServer\MediaReader\AVCPacket;
 use MediaServer\MediaReader\MediaFrame;
+use Root\Cache;
 
 class Mpegts
 {
@@ -320,6 +322,10 @@ class Mpegts
     public static $duration = 3000;
 
     public static $fileHandle ;
+
+    public static $index = [];
+
+    public static $lastCutTime = null;
     /**
      * 协议入口
      * @param MediaFrame $frame
@@ -342,37 +348,35 @@ class Mpegts
         /** 切片目录key */
         $tsFilesKey = $playStreamPath . '_ts';
         /** 获取所有ts目录 */
-        $tsFiles = Cache::flush($tsFilesKey);
+        $tsFiles = self::$index;
         /** 生成ts名称 */
         $tsFile = 'segment' . count($tsFiles) . '.ts';
 
         /** ts存放路径 */
         $tsFileName = $outputDir . '/' . $tsFile;
         /** 打开ts文件 */
-        self::$fileHandle = @fopen($tsFileName, 'wb');
+        self::$fileHandle = @fopen($tsFileName, 'wb+');
         /** 获取最近一次切片时间 */
-        if (Cache::has($lastCutTimeKey)) {
-            $lastCutTime = Cache::get($lastCutTimeKey);
-        } else {
-            $lastCutTime = $nowTime;
-            Cache::set($lastCutTimeKey, $nowTime);
-        }
+       if (!self::$lastCutTime){
+           self::$lastCutTime = $nowTime;
+       }
 
         /** 原始数据 使用字符串的方式读取 */
         $buffer = str_split($frame->_data);
-        $first = ord($buffer[1]);
-        var_dump($first);
 
+
+
+        /** 音频 */
         if ($frame->FRAME_TYPE == MediaFrame::AUDIO_FRAME) {
-            $aac = $frame->getAACPacket();
             if ($frame->soundFormat != AudioFrame::SOUND_FORMAT_AAC) {
                 var_dump("不是aac编码");
             } else {
-                var_dump("是aac编码");
+                $first = ord($buffer[1]);
                 /** 原始数据 */
                 if ($first == 1) {
                     $tagData = array_slice($buffer, 2);
-                    $adtsHeader = array(0xff, 0xf1, 0x4c, 0x80, 0x00, 0x00, 0xfc);
+                    $adtsHeader = [0xff, 0xf1, 0x4c, 0x80, 0x00, 0x00, 0xfc];
+
                     $tagDataLength = count($tagData);
                     $adtsLen = (($tagDataLength + 7) << 5) | 0x1f;
                     $adtsHeader[4] = ($adtsLen >> 8) & 0xFF; // 高位
@@ -388,14 +392,73 @@ class Mpegts
             }
         }
 
+        /** 视频 */
+        if ($frame->FRAME_TYPE == MediaFrame::VIDEO_FRAME){
+            $avc = $frame->getAVCPacket();
+            $avcPacketType = $avc->avcPacketType;
+            $compositionTime = $avc->compositionTime;
+
+            $nalu = [];
+            /** avc配置头 */
+            if ($avcPacketType == AVCPacket::AVC_PACKET_TYPE_SEQUENCE_HEADER){
+
+                // 计算 sps 的长度
+                $spsLen = unpack("n", $buffer[11].$buffer[12])[1];
+                /* 获取sps数据 */
+                //sps := tagData[13 : 13+spsLen];
+
+                $sps = [];
+                for ($i=13;$i<13+$spsLen;$i++){
+                    $sps[] = $buffer[$i];
+                }
+                /* 组装解码数据 */
+                $spsnalu = self::push([0,0,0,1],$sps);
+
+                $nalu = self::push($nalu,$spsnalu);
+
+                /* 获取pps */
+                //ppsLen := int(binary.BigEndian.Uint16(tagData[14+spsLen : 16+spsLen]))
+                $ppsLen = unpack('n',implode('',array_slice($buffer,14+$spsLen,2)))[1];
+		        /* 获取pps的数据 */
+		        //pps := tagData[16+spsLen : 16+spsLen+ppsLen]
+                $pps = [];
+                for ($i = 16+$spsLen;$i<(16+$spsLen+$ppsLen);$i++){
+                    $pps[] = $buffer[$i];
+                }
+		        /* 组装pps */
+		        //ppsnalu := append([]byte{0, 0, 0, 1}, pps...)
+                $ppsnalu = self::push([0,0,0,1],$pps);
+		            /* 将pps追加到nalu */
+		            //nalu = append(nalu, ppsnalu...)
+                $nalu = self::push($nalu,$ppsnalu);
+
+            }elseif($avcPacketType == AVCPacket::AVC_PACKET_TYPE_NALU){
+               /** 视频原始数据 */
+                $readed = 5;
+                while(count($buffer)>($readed + 5)){
+                    $readleng = unpack("N",implode('',array_slice($buffer,$readed,4)))[1];
+                    $readed +=4;
+                    /** 追加头*/
+                    $nalu = self::push($nalu,[0,0,0,1]);
+                    $nalu = self::push($nalu,array_slice($buffer,$readed,$readed+$readleng));
+                    $readed += $readleng;
+                }
+            }
+
+            $dts = $frame->timestamp * 90;
+            $pts = $dts + $compositionTime * 90;
+            $pes = self::PES(self::$VideoMark,$pts,$dts);
+            self::toPack(self::$VideoMark,self::push($pes,$nalu),$dts);
+        }
+
+
         /** 比较当前时间和最近一次切片操作时间 若超过切片时间，则开始本次切片  */
-        if (($nowTime - $lastCutTime) >= self::$duration) {
+        if (($nowTime - self::$lastCutTime) >= self::$duration) {
             /** 获取所有媒体数据 */
             $mediaData = self::$queue;
             /** 清空 */
             self::$queue = [];
-            /** 并更写最近一次切片操作时间 */
-            Cache::set($lastCutTimeKey, $nowTime);
+            self::$lastCutTime = $nowTime;
             /** 写入sdt */
             self::SDT(self::$fileHandle);
             /** 写入pat */
@@ -414,9 +477,7 @@ class Mpegts
             /** 生成索引文件 */
             self::generateM3U8($tsFiles, $outputDir);
             /** 将目录重新存入到缓存 */
-            foreach ($tsFiles as $fileName) {
-                Cache::push($tsFilesKey, $fileName);
-            }
+            self::$index[]=$tsFile;
         } else {
             /** 否则不操作 */
             return;
@@ -517,16 +578,13 @@ class Mpegts
             }
             /* 写入到ts文件中 */
             $adapta = false;
-            self::write($cPack);
+            self::$queue[] = $cPack;
         }
     }
 
     /** 缓存 */
     public static $queue = [];
-    public static function write($data)
-    {
-        self::$queue[] = $data;
-    }
+
 
     public static $VideoContinuty = 0;
 
