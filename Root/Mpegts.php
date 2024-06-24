@@ -389,7 +389,16 @@ class Mpegts
             /** 获取所有媒体数据 */
             $mediaData = self::$queue;
             /** 清空，把视频解码帧写进去，确保每一个ts文件都有视频解码帧 */
-            self::$queue = [self::$avcSeqFrame];
+            self::$queue = [];
+            /** 不是第一次切片需要追加视频解码帧 */
+            if (self::$avcSeqFrame){
+                /** 处理解码帧 */
+                self::handleVideo(self::$avcSeqFrame);
+                /** 重新排序 */
+                $mediaData = self::push(self::$queue,$mediaData);
+                /** 清空队列 */
+                self::$queue = [];
+            }
             /** 获取所有ts目录 */
             $tsFiles = self::$index;
             /** 生成ts名称 */
@@ -447,6 +456,7 @@ class Mpegts
         $nalu = [];
         /** avc配置头 */
         if ($avcPacketType == AVCPacket::AVC_PACKET_TYPE_SEQUENCE_HEADER) {
+            var_dump("解码帧");
             /** 先保存解码帧 */
             self::$avcSeqFrame = $frame;
             // 计算 sps 的长度
