@@ -328,12 +328,12 @@ class Mpegts
             if ($dts > 0) {
                 $header[7] = 0xc0;
                 $header[8] = 0x0a;
-                $header = array_merge($header, self::hexPts($pts));
-                $header = array_merge($header, self::hexDts($dts));
+                $header = self::push($header, self::hexPts($pts));
+                $header = self::push($header, self::hexDts($dts));
             } else {
                 $header[7] = 0x80;
                 $header[8] = 0x05;
-                $header = array_merge($header, self::hexPts($pts));
+                $header = self::push($header, self::hexPts($pts));
             }
         }
 
@@ -610,11 +610,17 @@ class Mpegts
                 /* 将计算后的pcr写入到包的5-12位 */
                 $pcr = self::hexPcr($dts * 90);
                 for ($i = 5; $i < 12; $i++) {
+                    if (!isset($pcr[$i - 5])){
+                        continue;
+                    }
                     $cPack[$i] = $pcr[$i - 5];
                 }
 
                 /* 将pes的前176个字节复制给cpack */
                 for ($i = 12; $i < 188; $i++) {
+                    if(!isset($pes[$i - 12])){
+                        continue;
+                    }
                     $cPack[$i] = $pes[$i - 12];
                 }
 
@@ -623,6 +629,9 @@ class Mpegts
             } else {
                 /* 分包，将pes的前184位写入到cpack 第4-188位 */
                 for ($i = 4; $i < 188; $i++) {
+                    if (!isset($pes[$i - 1])){
+                        continue;
+                    }
                     $cPack[$i] = $pes[$i - 1];
                 }
                 /* 更新pes包内容 */
