@@ -602,7 +602,7 @@ class Mpegts
                     $cPack[$i] = $pes[$i - 5];
                 }
                 /* 清空切片 */
-                $pes = array_slice($pes, $fillLen);
+                $pes = [];
             } elseif ($adapta) {
                 /* 长度大于了184，需要分割成多个ts数据包 */
                 // 获取pcr 第4位变更为 7
