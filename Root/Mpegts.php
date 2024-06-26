@@ -2,6 +2,7 @@
 
 namespace Root;
 
+use MediaServer\MediaReader\AACPacket;
 use MediaServer\MediaReader\AudioFrame;
 use MediaServer\MediaReader\AVCPacket;
 use MediaServer\MediaReader\MediaFrame;
@@ -516,6 +517,12 @@ class Mpegts
         if ($frame->soundFormat != AudioFrame::SOUND_FORMAT_AAC) {
             var_dump("不是aac编码");
         } else {
+            $aacPack = $frame->getAACPacket();
+            if ($aacPack->aacPacketType == AACPacket::AAC_PACKET_TYPE_SEQUENCE_HEADER){
+                var_dump("音频解码帧，丢弃");
+                return;
+            }
+
             $first = ord($buffer[1]);
             /** 原始数据 */
             if ($first == 1) {
@@ -559,28 +566,31 @@ class Mpegts
     /** 生成mpeg包 */
     public static function toPack($mtype, $pes, $dts)
     {
+        /** 是否需要适配 当 pes 的长度小于 184 时），则 adapta 会被设置为 false */
         $adapta = true;
+        /** 是否需要混合 当 pes 的长度小于 184 时），则 mixed 会被设置为 true*/
         $mixed = false;
 
+        /** 如果pes还有内容 */
         while ($pes) {
-
+            /** 计算pes长度 */
             $pesLen = count($pes);
-
+            /** 长度为0，没有值，退出 */
             if ($pesLen <= 0) {
                 break;
             }
-
+            /** pes载荷小于184 ，那么需要混合 */
             if ($pesLen < 184) {
                 $mixed = true;
             }
-
+            /** 初始化一个ts包长度188 使用0xf 填充 */
             $cPack = array_fill(0, 188, 0xff);
             /* 前4位是header */
             $toHead = self::toHead($adapta, $mixed, $mtype);
-            $cPack[0] = $toHead[0];
-            $cPack[1] = $toHead[1];
-            $cPack[2] = $toHead[2];
-            $cPack[3] = $toHead[3];
+            $cPack[0] = $toHead[0];# 0x47
+            $cPack[1] = $toHead[1];# 0x01
+            $cPack[2] = $toHead[2];# 0x01 或者 0x00
+            $cPack[3] = $toHead[3];# 音视频的计数器
 
             /** 小数据包，不用分割 */
             if ($mixed) {
@@ -594,12 +604,12 @@ class Mpegts
                     /* 第5位变更为0 */
                     $cPack[5] = 0;
                 }
+                //copy(cPack[fillLen+5:188], pes[:pesLen])
                 /* 将pes所有内容，复制到cpack包的非填充位 */
                 for ($i = $fillLen + 5; $i < 188; $i++) {
-                    if (!isset($pes[$i - 5])) {
-                        continue;
+                    if (isset($pes[$i - ($fillLen + 5)])) {
+                        $cPack[$i] = $pes[$i - ($fillLen + 5)];
                     }
-                    $cPack[$i] = $pes[$i - 5];
                 }
                 /* 清空切片 */
                 $pes = [];
@@ -607,32 +617,31 @@ class Mpegts
                 /* 长度大于了184，需要分割成多个ts数据包 */
                 // 获取pcr 第4位变更为 7
                 $cPack[4] = 7;
+                //copy(cPack[5:12], hexPcr(t.DTS*uint32(defaultH264HZ)))
                 /* 将计算后的pcr写入到包的5-12位 */
                 $pcr = self::hexPcr($dts * 90);
                 for ($i = 5; $i < 12; $i++) {
-                    if (!isset($pcr[$i - 5])){
-                        continue;
+                    if (isset($pcr[$i - 5])){
+                        $cPack[$i] = $pcr[$i - 5];
                     }
-                    $cPack[$i] = $pcr[$i - 5];
                 }
-
+                //copy(cPack[12:188], pes[0:176])
                 /* 将pes的前176个字节复制给cpack */
                 for ($i = 12; $i < 188; $i++) {
-                    if(!isset($pes[$i - 12])){
-                        continue;
+                    if(isset($pes[$i - 12])){
+                        $cPack[$i] = $pes[$i - 12];
                     }
-                    $cPack[$i] = $pes[$i - 12];
                 }
 
                 /* 更新pes包内容，删除已被写入的数据 */
                 $pes = array_slice($pes, 176);
             } else {
+                //copy(cPack[4:188], pes[0:184])
                 /* 分包，将pes的前184位写入到cpack 第4-188位 */
                 for ($i = 4; $i < 188; $i++) {
-                    if (!isset($pes[$i - 1])){
-                        continue;
+                    if (isset($pes[$i - 4])){
+                        $cPack[$i] = $pes[$i - 4];
                     }
-                    $cPack[$i] = $pes[$i - 1];
                 }
                 /* 更新pes包内容 */
                 $pes = array_slice($pes, 184);
@@ -653,12 +662,12 @@ class Mpegts
 
     /**
      * 生成mpeg头
-     * @param $adapta
-     * @param $mixed
-     * @param $mtype
+     * @param bool $adapta 是否需要适配
+     * @param bool $mixed 是否需要混合
+     * @param mixed $mtype 音视频数据类型
      * @return array
      */
-    public static function toHead($adapta, $mixed, $mtype)
+    public static function toHead(bool $adapta, bool $mixed, $mtype)
     {
         // 创建一个长度为4的数组，初始化所有元素为0
         $tsHead = array_fill(0, 4, 0);
