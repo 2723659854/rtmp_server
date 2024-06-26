@@ -453,25 +453,26 @@ class Mpegts
         $avcPacketType = $avc->avcPacketType;
         /** 校正时间戳 */
         $compositionTime = $avc->compositionTime;
-
+        /** 初始化视频帧nalu数据 */
         $nalu = [];
         /** avc配置头 */
         if ($avcPacketType == AVCPacket::AVC_PACKET_TYPE_SEQUENCE_HEADER) {
             var_dump("解码帧");
             /** 先保存解码帧 */
             self::$avcSeqFrame = $frame;
+            // spsLen := int(binary.BigEndian.Uint16(tagData[11:13]))
             // 计算 sps 的长度
             $spsLen = unpack("n", $buffer[11] . $buffer[12])[1];
             /* 获取sps数据 */
             //sps := tagData[13 : 13+spsLen];
-
             $sps = [];
             for ($i = 13; $i < 13 + $spsLen; $i++) {
                 $sps[] = $buffer[$i];
             }
+            //spsnalu := append([]byte{0, 0, 0, 1}, sps...)
             /* 组装解码数据 */
             $spsnalu = self::push([0, 0, 0, 1], $sps);
-
+            //nalu = append(nalu, spsnalu...)
             $nalu = self::push($nalu, $spsnalu);
 
             /* 获取pps */
@@ -493,11 +494,15 @@ class Mpegts
         } elseif ($avcPacketType == AVCPacket::AVC_PACKET_TYPE_NALU) {
             /** 视频原始数据 */
             $readed = 5;
+            //for len(tagData) > (readed + 5)
             while (count($buffer) > ($readed + 5)) {
+                //readleng := int(binary.BigEndian.Uint32(tagData[readed : readed+4]))
                 $readleng = unpack("N", implode('', array_slice($buffer, $readed, 4)))[1];
                 $readed += 4;
                 /** 追加头*/
+                //nalu = append(nalu, []byte{0, 0, 0, 1}...)
                 $nalu = self::push($nalu, [0, 0, 0, 1]);
+                //	nalu = append(nalu, tagData[readed:readed+readleng]...)
                 $nalu = self::push($nalu, array_slice($buffer, $readed, $readed + $readleng));
                 $readed += $readleng;
             }
@@ -505,7 +510,9 @@ class Mpegts
 
         $dts = $frame->timestamp * 90;
         $pts = $dts + $compositionTime * 90;
+        // pes := PES(VideoMark, pts, dts)
         $pes = self::PES(self::$VideoMark, $pts, $dts);
+        //t.toPack(VideoMark, append(pes, nalu...))
         self::toPack(self::$VideoMark, self::push($pes, $nalu), $dts);
     }
 
@@ -517,28 +524,33 @@ class Mpegts
         if ($frame->soundFormat != AudioFrame::SOUND_FORMAT_AAC) {
             var_dump("不是aac编码");
         } else {
-            $aacPack = $frame->getAACPacket();
-            if ($aacPack->aacPacketType == AACPacket::AAC_PACKET_TYPE_SEQUENCE_HEADER){
-                var_dump("音频解码帧，丢弃");
-                return;
-            }
-
+//            $aacPack = $frame->getAACPacket();
+//            if ($aacPack->aacPacketType == AACPacket::AAC_PACKET_TYPE_SEQUENCE_HEADER){
+//                var_dump("音频解码帧，丢弃");
+//                return;
+//            }
+//
             $first = ord($buffer[1]);
             /** 原始数据 */
             if ($first == 1) {
+                //tagData = tagData[2:]
                 $tagData = array_slice($buffer, 2);
+                //adtsHeader := []byte{0xff, 0xf1, 0x4c, 0x80, 0x00, 0x00, 0xfc}
                 $adtsHeader = [0xff, 0xf1, 0x4c, 0x80, 0x00, 0x00, 0xfc];
-
+                //adtsLen := uint16(((len(tagData) + 7) << 5) | 0x1f)
                 $tagDataLength = count($tagData);
                 $adtsLen = (($tagDataLength + 7) << 5) | 0x1f;
+                //binary.BigEndian.PutUint16(adtsHeader[4:6], adtsLen)
                 $adtsHeader[4] = ($adtsLen >> 8) & 0xFF; // 高位
                 $adtsHeader[5] = $adtsLen & 0xFF;        // 低位
+                //adts := append(adtsHeader, tagData...)
                 $adts = self::push($adtsHeader, $tagData);
 
                 $dts = $frame->dts;
                 $pts = $dts * 90;
-
+                //pes := PES(AudioMark, pts, 0)
                 $pes = self::PES(self::$AudioMark, $pts, 0);
+                //t.toPack(AudioMark, append(pes, adts...))
                 self::toPack(self::$AudioMark, self::push($pes, $adts), $dts);
             }
         }
@@ -585,6 +597,7 @@ class Mpegts
             }
             /** 初始化一个ts包长度188 使用0xf 填充 */
             $cPack = array_fill(0, 188, 0xff);
+            //copy(cPack[0:4], t.toHead(adapta, mixed, mtype))
             /* 前4位是header */
             $toHead = self::toHead($adapta, $mixed, $mtype);
             $cPack[0] = $toHead[0];# 0x47
