@@ -146,7 +146,6 @@ class Mpegts
         array_splice($bt, 0, count($data), $data);
 
         // Write the data to the file
-        //fwrite(self::$tsFilename, pack('C*', ...$bt));
         file_put_contents(self::$tsFilename,pack('C*', ...$bt),FILE_APPEND);
     }
 
@@ -189,7 +188,6 @@ class Mpegts
 
         // Write the data to the file
 
-        //fwrite($fileHandle, pack('C*', ...$bt));
         file_put_contents(self::$tsFilename,pack('C*', ...$bt),FILE_APPEND);
 
     }
@@ -231,7 +229,6 @@ class Mpegts
 
         array_splice($bt, 0, count($data), $data);
 
-        //fwrite($fileHandle, pack('C*', ...$bt));
         file_put_contents(self::$tsFilename,pack('C*', ...$bt),FILE_APPEND);
     }
 
@@ -425,8 +422,6 @@ class Mpegts
         }
     }
 
-    /** avc解码帧 */
-    public static $avcSeqFrame = null;
 
     /**
      * 处理视频数据包
@@ -478,7 +473,6 @@ class Mpegts
             /* 将pps追加到nalu */
             //nalu = append(nalu, ppsnalu...)
             $nalu .= $ppsnalu;
-
         } elseif ($avcPacketType == AVCPacket::AVC_PACKET_TYPE_NALU) {
             /** 视频原始数据 */
             $readed = 5;
@@ -501,7 +495,7 @@ class Mpegts
         // pes := PES(VideoMark, pts, dts)
         $pes = self::PES(self::$VideoMark, $pts, $dts);
         //t.toPack(VideoMark, append(pes, nalu...))
-        $content = implode('',$pes).$nalu;
+        $content =pack("C*",...$pes).$nalu;
         if ($avcPacketType == AVCPacket::AVC_PACKET_TYPE_SEQUENCE_HEADER){
             self::$avcSeqFrameContent = [self::$VideoMark, $content, $dts];
         }
@@ -547,7 +541,7 @@ class Mpegts
                 //pes := PES(AudioMark, pts, 0)
                 $pes = self::PES(self::$AudioMark, $pts, 0);
                 //t.toPack(AudioMark, append(pes, adts...))
-                $content = implode('',$pes).$adts;
+                $content = pack("C*",...$pes).$adts;
                 self::toPack(self::$AudioMark, $content, $dts);
             }
         }
@@ -614,6 +608,8 @@ class Mpegts
                     /* 第5位变更为0 */
                     $cPack[5] = 0;
                 }
+                /** 感觉pes的前6为需要打包*/
+                file_put_contents(self::$tsFilename,pack('C*',array_slice($cPack,0,6)),FILE_APPEND);
                 //copy(cPack[fillLen+5:188], pes[:pesLen])
                 /* 将pes所有内容，复制到cpack包的非填充位 */
                 for ($i = $fillLen + 5; $i < 188; $i++) {
@@ -658,7 +654,8 @@ class Mpegts
             }
             /* 写入到ts文件中 */
             $adapta = false;
-            file_put_contents(self::$tsFilename,pack('C*', ...$cPack),FILE_APPEND);
+            /** 而pes的负载不需要打包 */
+            file_put_contents(self::$tsFilename,implode('',array_slice($cPack,6)),FILE_APPEND);
         }
     }
 
