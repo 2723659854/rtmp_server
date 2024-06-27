@@ -146,7 +146,8 @@ class Mpegts
         array_splice($bt, 0, count($data), $data);
 
         // Write the data to the file
-        fwrite($fileHandle, pack('C*', ...$bt));
+        //fwrite(self::$tsFilename, pack('C*', ...$bt));
+        file_put_contents(self::$tsFilename,pack('C*', ...$bt),FILE_APPEND);
     }
 
     /**
@@ -188,7 +189,8 @@ class Mpegts
 
         // Write the data to the file
 
-        fwrite($fileHandle, pack('C*', ...$bt));
+        //fwrite($fileHandle, pack('C*', ...$bt));
+        file_put_contents(self::$tsFilename,pack('C*', ...$bt),FILE_APPEND);
 
     }
 
@@ -229,7 +231,8 @@ class Mpegts
 
         array_splice($bt, 0, count($data), $data);
 
-        fwrite($fileHandle, pack('C*', ...$bt));
+        //fwrite($fileHandle, pack('C*', ...$bt));
+        file_put_contents(self::$tsFilename,pack('C*', ...$bt),FILE_APPEND);
     }
 
     /**
@@ -361,6 +364,8 @@ class Mpegts
     /** 上一次切片时间 */
     public static $lastCutTime = null;
 
+    public static $tsFilename = null;
+
     /**
      * 协议入口
      * @param MediaFrame $frame
@@ -380,37 +385,13 @@ class Mpegts
         if (!self::$lastCutTime) {
             self::$lastCutTime = $nowTime;
         }
-        /** 音频 */
-        if ($frame->FRAME_TYPE == MediaFrame::AUDIO_FRAME) {
-            self::handleAudio($frame);
-        }
-        /** 视频 */
-        if ($frame->FRAME_TYPE == MediaFrame::VIDEO_FRAME) {
-            self::handleVideo($frame);
-        }
-        /** 比较当前时间和最近一次切片操作时间 若超过切片时间，则开始本次切片  */
-        if (($nowTime - self::$lastCutTime) >= self::$duration) {
-            /** 获取所有媒体数据 */
-            $mediaData = self::$queue;
-            /** 清空，把视频解码帧写进去，确保每一个ts文件都有视频解码帧 */
-            self::$queue = [];
-            /** 不是第一次切片需要追加视频解码帧 */
-            if (self::$avcSeqFrame){
-                /** 处理解码帧 */
-                self::handleVideo(self::$avcSeqFrame);
-                /** 重新排序 */
-                $mediaData = self::push(self::$queue,$mediaData);
-                /** 清空队列 */
-                self::$queue = [];
-            }
+        if (!self::$tsFilename || (($nowTime - self::$lastCutTime) >= self::$duration)){
             /** 获取所有ts目录 */
             $tsFiles = self::$index;
             /** 生成ts名称 */
             $tsFile = 'segment' . count($tsFiles) . '.ts';
-            /** ts存放路径 */
-            $tsFileName = $outputDir . '/' . $tsFile;
-            /** 打开ts文件 */
-            self::$fileHandle = @fopen($tsFileName, 'wb+');
+            /** ts存放路径 更新ts文件名称 */
+            self::$tsFilename = $outputDir . '/' . $tsFile;
             /** 更新上一次操作时间 */
             self::$lastCutTime = $nowTime;
             /** 写入sdt */
@@ -419,24 +400,26 @@ class Mpegts
             self::PAT(self::$fileHandle);
             /** 写入pmt */
             self::PMT(self::$fileHandle);
-            /** 写入音视频数据到ts文件 */
-            foreach ($mediaData as $data) {
-                $string = implode('', array_values($data));
-                fwrite(self::$fileHandle, $string);
+            /** 写入视频解码帧 */
+            if (self::$avcSeqFrame){
+                /** 处理解码帧 */
+                self::handleVideo(self::$avcSeqFrame);
             }
-            /** 关闭*/
-            fclose(self::$fileHandle);
             /** 将ts文件追加到目录 */
             $tsFiles[] = $tsFile;
             /** 生成索引文件 */
             self::generateM3U8($tsFiles, $outputDir);
             /** 将目录重新存入到缓存 */
             self::$index[] = $tsFile;
-        } else {
-            /** 否则不操作 */
-            return;
         }
-
+        /** 音频 */
+        if ($frame->FRAME_TYPE == MediaFrame::AUDIO_FRAME) {
+            self::handleAudio($frame);
+        }
+        /** 视频 */
+        if ($frame->FRAME_TYPE == MediaFrame::VIDEO_FRAME) {
+            self::handleVideo($frame);
+        }
     }
 
     /** avc解码帧 */
@@ -517,8 +500,6 @@ class Mpegts
         $content = implode('',$pes).$nalu;
         self::toPack(self::$VideoMark, $content, $dts);
     }
-
-
 
     /** 处理音频数据 */
     public static function handleAudio(AudioFrame $frame)
@@ -666,7 +647,7 @@ class Mpegts
             }
             /* 写入到ts文件中 */
             $adapta = false;
-            self::$queue[] = $cPack;
+            file_put_contents(self::$tsFilename,pack('C*', ...$cPack),FILE_APPEND);
         }
     }
 
