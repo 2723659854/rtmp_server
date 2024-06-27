@@ -389,7 +389,7 @@ class Mpegts
             /** 获取所有ts目录 */
             $tsFiles = self::$index;
             /** 生成ts名称 */
-            $tsFile =  count($tsFiles) . '.ts';
+            $tsFile =  (count($tsFiles)+1 ). '.ts';
             /** ts存放路径 更新ts文件名称 */
             self::$tsFilename = $outputDir . '/' . $tsFile;
             /** 更新上一次操作时间 */
@@ -401,10 +401,13 @@ class Mpegts
             /** 写入pmt */
             self::PMT(self::$fileHandle);
             /** 写入视频解码帧 */
-            if (self::$avcSeqFrame){
-                /** 处理解码帧 */
-                self::handleVideo(self::$avcSeqFrame);
+            if (self::$avcSeqFrameContent){
+                var_dump("新的ts文件，写入视频解码帧");
+                list($mtype,$pes,$dts) = self::$avcSeqFrameContent;
+                self::toPack($mtype,$pes,$dts);
             }
+
+
             /** 将ts文件追加到目录 */
             $tsFiles[] = $tsFile;
             /** 生成索引文件 */
@@ -455,6 +458,7 @@ class Mpegts
             // spsLen := int(binary.BigEndian.Uint16(tagData[11:13]))
             // 计算 sps 的长度
             $set = MediaServer::$spsInfo;
+
             $sps = '';
             foreach ($set['sps'] as $value){
                 $sps .= $value['content'];
@@ -498,8 +502,15 @@ class Mpegts
         $pes = self::PES(self::$VideoMark, $pts, $dts);
         //t.toPack(VideoMark, append(pes, nalu...))
         $content = implode('',$pes).$nalu;
+        if ($avcPacketType == AVCPacket::AVC_PACKET_TYPE_SEQUENCE_HEADER){
+            self::$avcSeqFrameContent = [self::$VideoMark, $content, $dts];
+        }
+
         self::toPack(self::$VideoMark, $content, $dts);
     }
+
+    /** 处理后的视频解码帧 */
+    public static array $avcSeqFrameContent = [];
 
     /** 处理音频数据 */
     public static function handleAudio(AudioFrame $frame)
