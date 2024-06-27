@@ -271,6 +271,7 @@ class MediaServer
         }
     }
 
+    public static $spsInfo = [];
     /** 音频解码帧 */
     public static array $aacKeyFrame = [];
     /** 视频解码帧 */

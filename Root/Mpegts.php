@@ -2,11 +2,14 @@
 
 namespace Root;
 
+use MediaServer\Flv\Flv;
+use MediaServer\Flv\FlvTag;
 use MediaServer\MediaReader\AACPacket;
 use MediaServer\MediaReader\AudioFrame;
 use MediaServer\MediaReader\AVCPacket;
 use MediaServer\MediaReader\MediaFrame;
 use MediaServer\MediaReader\VideoFrame;
+use MediaServer\MediaServer;
 use Root\Cache;
 
 class Mpegts
@@ -446,7 +449,14 @@ class Mpegts
     public static function handleVideo(VideoFrame $frame)
     {
         /** 原始数据 使用字符串的方式读取 */
-        $buffer = str_split($frame->_data);
+        $tag = new FlvTag();
+        $tag->type = Flv::VIDEO_TAG;
+        $tag->timestamp = $frame->timestamp;
+        $tag->data = (string)$frame;
+        $tag->dataSize = strlen($tag->data);
+        $buffer = Flv::createFlvTag($tag);
+        //$buffer = str_split($chunks);
+
         /** avc数据包 */
         $avc = $frame->getAVCPacket();
         /** avc数据包类型 */
@@ -454,56 +464,47 @@ class Mpegts
         /** 校正时间戳 */
         $compositionTime = $avc->compositionTime;
         /** 初始化视频帧nalu数据 */
-        $nalu = [];
+        $nalu = '';
         /** avc配置头 */
         if ($avcPacketType == AVCPacket::AVC_PACKET_TYPE_SEQUENCE_HEADER) {
-            var_dump("解码帧");
             /** 先保存解码帧 */
-            self::$avcSeqFrame = $frame;
+
             // spsLen := int(binary.BigEndian.Uint16(tagData[11:13]))
             // 计算 sps 的长度
-            $spsLen = unpack("n", $buffer[11] . $buffer[12])[1];
-            /* 获取sps数据 */
-            //sps := tagData[13 : 13+spsLen];
-            $sps = [];
-            for ($i = 13; $i < 13 + $spsLen; $i++) {
-                $sps[] = $buffer[$i];
+            $set = MediaServer::$spsInfo;
+            $sps = '';
+            foreach ($set['sps'] as $value){
+                $sps .= $value['content'];
             }
-            //spsnalu := append([]byte{0, 0, 0, 1}, sps...)
-            /* 组装解码数据 */
-            $spsnalu = self::push([0, 0, 0, 1], $sps);
-            //nalu = append(nalu, spsnalu...)
-            $nalu = self::push($nalu, $spsnalu);
 
-            /* 获取pps */
-            //ppsLen := int(binary.BigEndian.Uint16(tagData[14+spsLen : 16+spsLen]))
-            $ppsLen = unpack('n', implode('', array_slice($buffer, 14 + $spsLen, 2)))[1];
-            /* 获取pps的数据 */
-            //pps := tagData[16+spsLen : 16+spsLen+ppsLen]
-            $pps = [];
-            for ($i = 16 + $spsLen; $i < (16 + $spsLen + $ppsLen); $i++) {
-                $pps[] = $buffer[$i];
+            $spsnalu = "\x00\x00\x00\x01".$sps;
+            //nalu = append(nalu, spsnalu...)
+            $nalu .= $spsnalu;
+
+            $pps = '';
+            foreach ($set['pps'] as $value){
+                $pps .=$value['content'];
             }
             /* 组装pps */
             //ppsnalu := append([]byte{0, 0, 0, 1}, pps...)
-            $ppsnalu = self::push([0, 0, 0, 1], $pps);
+            $ppsnalu = "\x00\x00\x00\x01".$pps;
             /* 将pps追加到nalu */
             //nalu = append(nalu, ppsnalu...)
-            $nalu = self::push($nalu, $ppsnalu);
+            $nalu .= $ppsnalu;
 
         } elseif ($avcPacketType == AVCPacket::AVC_PACKET_TYPE_NALU) {
             /** 视频原始数据 */
             $readed = 5;
             //for len(tagData) > (readed + 5)
-            while (count($buffer) > ($readed + 5)) {
+            while (strlen($buffer) > ($readed + 5)) {
                 //readleng := int(binary.BigEndian.Uint32(tagData[readed : readed+4]))
-                $readleng = unpack("N", implode('', array_slice($buffer, $readed, 4)))[1];
+                $readleng = unpack("N", substr($buffer,$readed,4))[1];
                 $readed += 4;
                 /** 追加头*/
                 //nalu = append(nalu, []byte{0, 0, 0, 1}...)
-                $nalu = self::push($nalu, [0, 0, 0, 1]);
+                $nalu .= "\x00\x00\x00\x01";
                 //	nalu = append(nalu, tagData[readed:readed+readleng]...)
-                $nalu = self::push($nalu, array_slice($buffer, $readed, $readed + $readleng));
+                $nalu .=  substr($buffer,$readed,$readleng);
                 $readed += $readleng;
             }
         }
@@ -513,45 +514,49 @@ class Mpegts
         // pes := PES(VideoMark, pts, dts)
         $pes = self::PES(self::$VideoMark, $pts, $dts);
         //t.toPack(VideoMark, append(pes, nalu...))
-        self::toPack(self::$VideoMark, self::push($pes, $nalu), $dts);
+        $content = implode('',$pes).$nalu;
+        self::toPack(self::$VideoMark, $content, $dts);
     }
+
+
 
     /** 处理音频数据 */
     public static function handleAudio(AudioFrame $frame)
     {
         /** 原始数据 使用字符串的方式读取 */
-        $buffer = str_split($frame->_data);
+        $tag = new FlvTag();
+        $tag->type = Flv::AUDIO_TAG;
+        $tag->timestamp = $frame->timestamp;
+        $tag->data = (string)$frame;
+        $tag->dataSize = strlen($tag->data);
+        $buffer = Flv::createFlvTag($tag);
         if ($frame->soundFormat != AudioFrame::SOUND_FORMAT_AAC) {
             var_dump("不是aac编码");
         } else {
-//            $aacPack = $frame->getAACPacket();
-//            if ($aacPack->aacPacketType == AACPacket::AAC_PACKET_TYPE_SEQUENCE_HEADER){
-//                var_dump("音频解码帧，丢弃");
-//                return;
-//            }
-//
+
             $first = ord($buffer[1]);
             /** 原始数据 */
             if ($first == 1) {
                 //tagData = tagData[2:]
-                $tagData = array_slice($buffer, 2);
+                $tagData = substr($buffer,2);
                 //adtsHeader := []byte{0xff, 0xf1, 0x4c, 0x80, 0x00, 0x00, 0xfc}
-                $adtsHeader = [0xff, 0xf1, 0x4c, 0x80, 0x00, 0x00, 0xfc];
+                $adtsHeader = "\xff\xf1\x4c\x80\x00\x00\xfc";
                 //adtsLen := uint16(((len(tagData) + 7) << 5) | 0x1f)
-                $tagDataLength = count($tagData);
+                $tagDataLength = strlen($tagData);
                 $adtsLen = (($tagDataLength + 7) << 5) | 0x1f;
                 //binary.BigEndian.PutUint16(adtsHeader[4:6], adtsLen)
                 $adtsHeader[4] = ($adtsLen >> 8) & 0xFF; // 高位
                 $adtsHeader[5] = $adtsLen & 0xFF;        // 低位
                 //adts := append(adtsHeader, tagData...)
-                $adts = self::push($adtsHeader, $tagData);
+                $adts = $adtsHeader.$tagData;
 
                 $dts = $frame->dts;
                 $pts = $dts * 90;
                 //pes := PES(AudioMark, pts, 0)
                 $pes = self::PES(self::$AudioMark, $pts, 0);
                 //t.toPack(AudioMark, append(pes, adts...))
-                self::toPack(self::$AudioMark, self::push($pes, $adts), $dts);
+                $content = implode('',$pes).$adts;
+                self::toPack(self::$AudioMark, $content, $dts);
             }
         }
     }
@@ -576,7 +581,7 @@ class Mpegts
     }
 
     /** 生成mpeg包 */
-    public static function toPack($mtype, $pes, $dts)
+    public static function toPack($mtype, string $pes, $dts)
     {
         /** 是否需要适配 当 pes 的长度小于 184 时），则 adapta 会被设置为 false */
         $adapta = true;
@@ -586,7 +591,7 @@ class Mpegts
         /** 如果pes还有内容 */
         while ($pes) {
             /** 计算pes长度 */
-            $pesLen = count($pes);
+            $pesLen = strlen($pes);
             /** 长度为0，没有值，退出 */
             if ($pesLen <= 0) {
                 break;
@@ -625,7 +630,7 @@ class Mpegts
                     }
                 }
                 /* 清空切片 */
-                $pes = [];
+                $pes = '';
             } elseif ($adapta) {
                 /* 长度大于了184，需要分割成多个ts数据包 */
                 // 获取pcr 第4位变更为 7
@@ -647,7 +652,7 @@ class Mpegts
                 }
 
                 /* 更新pes包内容，删除已被写入的数据 */
-                $pes = array_slice($pes, 176);
+                $pes  = substr($pes,176);
             } else {
                 //copy(cPack[4:188], pes[0:184])
                 /* 分包，将pes的前184位写入到cpack 第4-188位 */
@@ -657,7 +662,7 @@ class Mpegts
                     }
                 }
                 /* 更新pes包内容 */
-                $pes = array_slice($pes, 184);
+                $pes = substr($pes,184);
             }
             /* 写入到ts文件中 */
             $adapta = false;

@@ -3,6 +3,7 @@
 
 namespace MediaServer\MediaReader;
 
+use MediaServer\MediaServer;
 use MediaServer\Utils\BitReader;
 
 /**
@@ -79,7 +80,8 @@ class AVCSequenceParameterSet extends BitReader
      */
     public function readData()
     {
-        /*$data = [];
+        $index = $this->currentBytes;
+        $data = [];
         $data['version'] = ord($this->data[$this->currentBytes++]);
         $data['profile'] = ord($this->data[$this->currentBytes++]);
         $data['profileCompatibility'] = ord($this->data[$this->currentBytes++]);
@@ -91,10 +93,11 @@ class AVCSequenceParameterSet extends BitReader
         for ($i = 0; $i < $data['nbSps']; $i++) {
             //读取sps
             $len = (ord($this->data[$this->currentBytes++]) << 8) | ord($this->data[$this->currentBytes++]);
-           var_dump(bin2hex(substr($this->data, $this->currentBytes, $len)));
+           //var_dump(bin2hex(substr($this->data, $this->currentBytes, $len)));
+            $content = substr($this->data, $this->currentBytes, $len);
             //var_dump(base64_encode(substr($this->data, $this->currentBytes, $len)));
             $byteTmp=$this->currentBytes;
-            var_dump(bin2hex($this->data[$this->currentBytes]));
+            //var_dump(bin2hex($this->data[$this->currentBytes]));
 
             $nalType=ord($this->data[$this->currentBytes++]) & 0x1f;
 
@@ -107,6 +110,9 @@ class AVCSequenceParameterSet extends BitReader
             $sps['flags']=ord($this->data[$this->currentBytes++]);
             $sps['levelIdc']=ord($this->data[$this->currentBytes++]);
 
+            $sps['length'] = $len;
+            $sps['content'] = $content;
+
             $data['sps'][] = $sps;
             $this->currentBytes = $byteTmp+$len;
         }
@@ -116,13 +122,18 @@ class AVCSequenceParameterSet extends BitReader
         for ($i = 0; $i < $data['nbPps']; $i++) {
             //读取sps
             $len = (ord($this->data[$this->currentBytes++]) << 8) | ord($this->data[$this->currentBytes++]);
-            $data['pps'][] = substr($this->data, $this->currentBytes, $len);
+            $pps = [];
+            $pps['length'] = $len;
+            $pps['content'] = substr($this->data, $this->currentBytes, $len);
+            $data['pps'][] = $pps;
             $this->currentBytes += $len;
         }
 
-        var_dump($data);
-        return;
-        */
+        //var_dump($data);
+
+        MediaServer::$spsInfo = $data;
+        $this->currentBytes = $index;
+
 
         //configurationVersion
         /** 跳过8个字节 就是跳过avc的头 */
