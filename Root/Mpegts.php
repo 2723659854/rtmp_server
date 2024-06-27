@@ -389,7 +389,7 @@ class Mpegts
             /** 获取所有ts目录 */
             $tsFiles = self::$index;
             /** 生成ts名称 */
-            $tsFile = 'segment' . count($tsFiles) . '.ts';
+            $tsFile =  count($tsFiles) . '.ts';
             /** ts存放路径 更新ts文件名称 */
             self::$tsFilename = $outputDir . '/' . $tsFile;
             /** 更新上一次操作时间 */
