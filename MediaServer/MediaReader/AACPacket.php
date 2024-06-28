@@ -10,6 +10,7 @@ use MediaServer\Utils\BitReader;
 /**
  * @purpose 音频数据包
  * @note aac数据包分为两种，一个是aac的AAC sequence header，另一个是aac raw原始数据
+ * 每个 Audio Tag 都有 SoundFormat，SoundRate，SoundSize，SoundType 这 4 个字段
  */
 class AACPacket
 {
@@ -24,9 +25,9 @@ class AACPacket
     const AAC_CHANNELS = [
         0, 1, 2, 3, 4, 5, 6, 8
     ];
-    /** aac序列号头部 */
+    /** aac序列号头部 当 AACPacketType 等于 0，代表这是 AudioSpecificConfig（序列头），AudioSpecificConfig 只出现在第一个 Audio Tag 中*/
     const AAC_PACKET_TYPE_SEQUENCE_HEADER = 0;
-    /** aac原始数据 */
+    /** aac原始数据 当 AACPacketType 等于 1，代表这是 AAC Raw frame data，也就是AAC 的裸流 */
     const AAC_PACKET_TYPE_RAW = 1;
 
 

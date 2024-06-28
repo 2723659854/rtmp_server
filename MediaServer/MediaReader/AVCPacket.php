@@ -46,6 +46,9 @@ class AVCPacket
         $this->avcPacketType=$stream->readTinyInt();
         //todo 这个合成时间戳很重要 后面转换为hls协议需要用到
         /** compositionTime校正时间 = pts显示时间戳 - dts校正时间戳 */
+        /** Video Data 里面的 CompositionTime Offset 是时间补偿，是用来计算有 B 帧场景的 PTS 的，Tag Header 里面的 TimeStamp
+         * 是解码时间，需要加上 CompositionTime Offset 才是 PTS。
+         */
         $this->compositionTime=$stream->readInt24();
     }
 

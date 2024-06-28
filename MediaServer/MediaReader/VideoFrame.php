@@ -33,6 +33,7 @@ class VideoFrame extends BinaryStream implements MediaFrame
 
     /** 關鍵幀（Key Frame）是一個完整、自包含的影像幀，不需要參考其他幀進行解碼。它通常是一個關鍵幀序列的開始，用來提供從頭開始解碼影像的基礎。
      * 在 H.264 和其他視頻編碼標準中，關鍵幀通常被標記為 I 幀（Intra Frame）
+     * FrameType 虽然是 1，但他的 Tag Data 里面的是编码信息
      */
     const VIDEO_FRAME_TYPE_KEY_FRAME = 1;
 
