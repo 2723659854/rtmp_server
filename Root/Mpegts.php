@@ -4,14 +4,16 @@ namespace Root;
 
 use MediaServer\Flv\Flv;
 use MediaServer\Flv\FlvTag;
-use MediaServer\MediaReader\AACPacket;
 use MediaServer\MediaReader\AudioFrame;
 use MediaServer\MediaReader\AVCPacket;
 use MediaServer\MediaReader\MediaFrame;
 use MediaServer\MediaReader\VideoFrame;
 use MediaServer\MediaServer;
-use Root\Cache;
 
+/**
+ * @purpose mpegts协议
+ * @note 一切看起来都是正确的，他么的生成ts文件就不正确，到底哪里出错了。fuck !
+ */
 class Mpegts
 {
 
@@ -99,37 +101,59 @@ class Mpegts
 
     /**
      * 创建sdt内容
-     * @param $fileHandle
      * @return void
-     * @comment 描述
+     * @comment 描述 可以不要，也是可以播放的
+     * @note https://www.cnblogs.com/moonwalk/p/16200434.html
      */
-    public static function SDT($fileHandle)
+    public static function SDT()
     {
         $bt = array_fill(0, 188, 0xff);
         $data = [
+            /** TS头：同步字节、传输错误、有效载荷单元启动、传输优先级、PID、加扰控制、自适应字段、连续性计数器 */
             0x47, 0x40, 0x11, 0x10, // TS header: Sync byte, transport error, payload unit start, transport priority, PID, scrambling control, adaptation field, continuity counter
+            /** 指针字段 */
             0x00,                   // Pointer field
+            /** 表ID */
             0x42,                   // Table ID
+            /** 节语法指示符，“0”，保留，节长度 */
             0xF0, 0x25,             // Section syntax indicator, '0', reserved, section length
+            /** 流ID */
             0x00, 0x01,             // Transport stream ID
+            /** 版本号，当前/下一个指示器 */
             0xC1,                   // Version number, current/next indicator
+            /** 节号 */
             0x00,                   // Section number
+            /** 上一个节号 */
             0x00,                   // Last section number
+            /** 原始网络ID，已保留，保留以备将来使用 */
             0xFF, 0x01, 0xFF,       // Original network ID, reserved, reserved for future use
+            /** 服务ID */
             0x00, 0x01,             // Service ID
+            /** EIT调度标志、EIT存在/跟随标志、运行状态、空闲CA模式、描述符循环长度 */
             0xFC,                   // EIT schedule flag, EIT present/following flag, running status, free CA mode, descriptors loop length
+            /** 描述符 */
             0x80,                   // Descriptor tag
+            /** 描述长度 */
             0x14,                   // Descriptor length
+            /** 服务描述符 */
             0x48,                   // Service descriptor tag
+            /** 服务描述长度 */
             0x12,                   // Service descriptor length
+            /** 服务类型 */
             0x01,                   // Service type
+            /** 服务提供名称长度 */
             0x06,                   // Service provider name length
+            /** 服务提供者名称：ffmpeg */
             0x46, 0x46, 0x6D, 0x70, 0x65, 0x67, // Service provider name ("FFmpeg")
+            /** 服务名称长度 */
             0x09,                   // Service name length
+            /** 服务名 */
             0x53, 0x65, 0x72, 0x76, 0x69, 0x63, 0x65, 0x30, 0x31, // Service name ("Service01")
         ];
 
+        /** 计算SDT段的CRC32（不包括TS标头和指针字段） */
         // Calculate CRC32 for the SDT section (excluding the TS header and pointer field)
+        /** 排除前5个字节（TS标头+指针字段） */
         $crcData = array_slice($data, 5); // Exclude first 5 bytes (TS header + pointer field)
         $crc = self::crc32_mpeg($crcData);
         $crcBytes = [
@@ -139,38 +163,52 @@ class Mpegts
             $crc & 0xFF
         ];
 
+        /** 将CRC附加到数据 */
         // Append CRC to the data
         $data = array_merge($data, $crcBytes);
 
+        /** 将$bt的开头替换为生成的$data */
         // Replace the beginning of $bt with the generated $data
         array_splice($bt, 0, count($data), $data);
 
+        /** 将数据写入ts文件 */
         // Write the data to the file
         file_put_contents(self::$tsFilename,pack('C*', ...$bt),FILE_APPEND);
     }
 
     /**
      * 创建pat内容
-     * @param $fileHandle
      * @return void
      */
-    public static function PAT($fileHandle)
+    public static function PAT()
     {
         $bt = array_fill(0, 188, 0xff);
         $data = [
+            /** TS头：同步字节、传输错误、有效载荷单元启动、传输优先级、PID、加扰控制、自适应字段、连续性计数器 */
             0x47, 0x40, 0x00, 0x10, // TS header: Sync byte, transport error, payload unit start, transport priority, PID, scrambling control, adaptation field, continuity counter
+            /** 指针字段 */
             0x00,                   // Pointer field
+            /** 表ID */
             0x00,                   // Table ID
+            /** 节语法指示符，“0”，保留，节长度  */
             0xB0, 0x0D,             // Section syntax indicator, '0', reserved, section length
+            /** 传输流ID */
             0x00, 0x01,             // Transport stream ID
+            /** 版本号 当前/下一个指示器 */
             0xC1,                   // Version number, current/next indicator
+            /** 节号 */
             0x00,                   // Section number
+            /** 上一个节号 */
             0x00,                   // Last section number
+            /** 节目号 0x00视频  0x01音频 */
             0x00, 0x01,             // Program number
+            /** 网络 */
             0xF0, 0x00,             // Network PID
         ];
 
+        /** 计算PAT的CRC32（不包括TS标头和指针字段） */
         // Calculate CRC32 for the PAT section (excluding the TS header and pointer field)
+        /** 排除前5个字节（TS标头+指针字段） */
         $crcData = array_slice($data, 5); // Exclude first 5 bytes (TS header + pointer field)
         $crc = self::crc32_mpeg($crcData);
         $crcBytes = [
@@ -179,41 +217,50 @@ class Mpegts
             ($crc >> 8) & 0xFF,
             $crc & 0xFF
         ];
-
+        /** 将CRC附加到数据 */
         // Append CRC to the data
         $data = array_merge($data, $crcBytes);
-
+        /** 将$bt的开头替换为生成的$data */
         // Replace the beginning of $bt with the generated $data
         array_splice($bt, 0, count($data), $data);
-
+        /** 将数据写入ts文件 */
         // Write the data to the file
-
         file_put_contents(self::$tsFilename,pack('C*', ...$bt),FILE_APPEND);
 
     }
 
     /**
      * 创建pmt内容
-     * @param $fileHandle
      * @return void
      */
-    public static function PMT($fileHandle)
+    public static function PMT()
     {
         $bt = array_fill(0, 188, 0xff);
         $data = [
+            /** ts头 */
             0x47, 0x50, 0x00, 0x10, // TS header
+            /** 指针字段和table_id */
             0x00, 0x02, // Pointer field and table_id
+            /** section 长度 */
             0xB0, 0x17, // Section_length
+            /** 节目号 视频，音频 */
             0x00, 0x01, // Program_number
+            /** 版本号，下一个指针 ，下一个section 和上一个section */
             0xC1, 0x00, 0x00, // Version_number, current_next_indicator, section_number, last_section_number
+            /** pcr始终校验表的pid */
             0xE1, 0x00, // PCR_PID
+            /** 节目信息长度 */
             0xF0, 0x00, // Program_info_length
+            /** 节目类型：视频 ，元素的pid */
             0x1B, 0xE1, 0x00, // Stream_type (video), elementary_PID
+            /** es信息的长度0 */
             0xF0, 0x00, // ES_info_length
+            /** 节目类型：音频，元素的pid */
             0x0F, 0xE1, 0x01, // Stream_type (audio), elementary_PID
+            /** es信息的长度 */
             0xF0, 0x00, // ES_info_length
         ];
-
+        /** 计算PMT的CRC32,跳过ts头，和指针 */
         // Calculate CRC32 for the PMT section (excluding the TS header and pointer field)
         $crcData = array_slice($data, 5); // Exclude first 5 bytes (TS header + pointer field)
         $crc = self::crc32_mpeg($crcData);
@@ -223,12 +270,12 @@ class Mpegts
             ($crc >> 8) & 0xFF,
             $crc & 0xFF
         ];
-
+        /** 数据替换 */
         // Replace the placeholder CRC with the calculated CRC
         array_splice($data, count($data) - 4, 4, $crcBytes);
-
+        /** 更新bt */
         array_splice($bt, 0, count($data), $data);
-
+        /** 写入到ts文件 */
         file_put_contents(self::$tsFilename,pack('C*', ...$bt),FILE_APPEND);
     }
 
@@ -353,9 +400,6 @@ class Mpegts
     /** 切片间隔时间 */
     public static $duration = 3000;
 
-    /** ts操作句柄 */
-    public static $fileHandle;
-
     /** 播放索引列表 */
     public static $index = [];
     /** 上一次切片时间 */
@@ -392,11 +436,11 @@ class Mpegts
             /** 更新上一次操作时间 */
             self::$lastCutTime = $nowTime;
             /** 写入sdt */
-            self::SDT(self::$fileHandle);
+            self::SDT();
             /** 写入pat */
-            self::PAT(self::$fileHandle);
+            self::PAT();
             /** 写入pmt */
-            self::PMT(self::$fileHandle);
+            self::PMT();
             /** 写入视频解码帧 */
             if (self::$avcSeqFrameContent){
                 var_dump("新的ts文件，写入视频解码帧");
@@ -495,6 +539,7 @@ class Mpegts
         // pes := PES(VideoMark, pts, dts)
         $pes = self::PES(self::$VideoMark, $pts, $dts);
         //t.toPack(VideoMark, append(pes, nalu...))
+        /** head需要打包 */
         $content =pack("C*",...$pes).$nalu;
         if ($avcPacketType == AVCPacket::AVC_PACKET_TYPE_SEQUENCE_HEADER){
             self::$avcSeqFrameContent = [self::$VideoMark, $content, $dts];
@@ -541,6 +586,7 @@ class Mpegts
                 //pes := PES(AudioMark, pts, 0)
                 $pes = self::PES(self::$AudioMark, $pts, 0);
                 //t.toPack(AudioMark, append(pes, adts...))
+                /** header部分需要变更为二进制，而payload不需要变更 */
                 $content = pack("C*",...$pes).$adts;
                 self::toPack(self::$AudioMark, $content, $dts);
             }
@@ -608,7 +654,7 @@ class Mpegts
                     /* 第5位变更为0 */
                     $cPack[5] = 0;
                 }
-                /** 感觉pes的前6为需要打包*/
+                /** ts的header需要打包成二进制 */
                 file_put_contents(self::$tsFilename,pack('C*',array_slice($cPack,0,6)),FILE_APPEND);
                 //copy(cPack[fillLen+5:188], pes[:pesLen])
                 /* 将pes所有内容，复制到cpack包的非填充位 */
@@ -654,7 +700,7 @@ class Mpegts
             }
             /* 写入到ts文件中 */
             $adapta = false;
-            /** 而pes的负载不需要打包 */
+            /** payload不需要打包 */
             file_put_contents(self::$tsFilename,implode('',array_slice($cPack,6)),FILE_APPEND);
         }
     }
