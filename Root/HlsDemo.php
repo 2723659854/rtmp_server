@@ -3,7 +3,11 @@
 
 namespace Root;
 
+use MediaServer\MediaReader\AACPacket;
+use MediaServer\MediaReader\AudioFrame;
+use MediaServer\MediaReader\AVCPacket;
 use MediaServer\MediaReader\MediaFrame;
+use MediaServer\MediaReader\VideoFrame;
 use MediaServer\MediaServer;
 
 /**
@@ -228,6 +232,9 @@ class HlsDemo
 
 
 
+    public static $avcKeyFrame;
+
+    public static $aacKeyFrame;
 
     /**
      * 协议入口
@@ -239,9 +246,31 @@ class HlsDemo
         if ($frame->FRAME_TYPE == MediaFrame::META_FRAME){
             return;
         }
-        // 修正音频流的标识符
-        $streamId = 0xC1; // AAC 音频流ID
+        if ($frame->FRAME_TYPE == MediaFrame::VIDEO_FRAME){
+            /** avc数据包 */
+            $avc = $frame->getAVCPacket();
+            /** avc数据包类型 */
+            $avcPacketType = $avc->avcPacketType;
+            /** avc配置头 */
+            if ($avcPacketType == AVCPacket::AVC_PACKET_TYPE_SEQUENCE_HEADER) {
 
+                self::$avcKeyFrame = [$frame->_buffer,$frame->timestamp];
+                return;
+            }
+        }
+        if ($frame->FRAME_TYPE == MediaFrame::AUDIO_FRAME){
+            /** avc数据包 */
+            $avc = $frame->getAACPacket();
+            /** avc数据包类型 */
+            $aacPacketType = $avc->aacPacketType;
+            /** avc配置头 */
+            if ($aacPacketType == AACPacket::AAC_PACKET_TYPE_SEQUENCE_HEADER) {
+
+                self::$aacKeyFrame = [$frame->_buffer,$frame->timestamp];
+                return;
+            }
+        }
+        // 修正音频流的标识符
         // 修改音频流参数（假设 AAC 编码，48kHz 采样率，立体声声道）
         $audioCodec = 0x0F; // MPEG-4 AAC
         $audioSampleRate =  0xBB80; // 48kHz
@@ -304,15 +333,27 @@ class HlsDemo
         /** 写入pmt */
         self::PMT($fileHandle);
 
+        if (self::$avcKeyFrame){
+            $videoFrame = new VideoFrame(self::$avcKeyFrame[0],self::$avcKeyFrame[1]);
+            array_unshift($mediaData,$videoFrame);
+            var_dump("添加视频解码帧");
+        }
+
+        if (self::$aacKeyFrame){
+            $audioFrame = new AudioFrame(self::$aacKeyFrame[0],self::$aacKeyFrame[1]);
+            array_unshift($mediaData,$audioFrame);
+            var_dump("添加音频解码帧");
+        }
+
         /** 遍历所有媒体数据 */
         foreach ($mediaData as $frame) {
             /** 判断帧类型 */
             if ($frame->isAudio()) {
                 $pid = 257;
-                $stream_id = $streamId; // 音频流ID
+                $stream_id = 0xC1; // 音频流ID
                 $packet = $frame->getAACPacket()->stream->dump();
                 // 创建 AAC PES 包
-                $pesPayload = self::createAacPesPayload($packet, $frame->timestamp, $frame->timestamp, $audioCodec, $audioSampleRate, $audioChannelConfig);
+                $pesPayload = self::createAacPesPayload($packet,  $frame->timestamp, $audioCodec, $audioSampleRate, $audioChannelConfig);
                 // 创建 PES 包
                 $pesPacket = self::createPes($stream_id, $pesPayload, $frame->timestamp, $frame->timestamp);
                 /** 写入ts文件 */
@@ -343,102 +384,49 @@ class HlsDemo
         }
     }
 
-    public static function hexPts($dpvalue) {
-        // 创建一个长度为5的数组，初始化所有元素为0
-        $dphex = array_fill(0, 5, 0);
-
-        // 计算第一个字节
-        $dphex[0] = 0x31 | (($dpvalue >> 29) & 0xFF);
-
-        // 计算 hp 和 he
-        $hp = ((($dpvalue >> 15) & 0x7FFF) * 2) + 1;
-        $he = ((($dpvalue & 0x7FFF) * 2) + 1);
-
-        // 将 hp 和 he 的高8位和低8位分开
-        $dphex[1] = ($hp >> 8) & 0xFF;
-        $dphex[2] = $hp & 0xFF;
-        $dphex[3] = ($he >> 8) & 0xFF;
-        $dphex[4] = $he & 0xFF;
-
-        return $dphex;
-    }
-
-
-    public static function hexDts($dpvalue) {
-        // 创建一个长度为5的数组，初始化所有元素为0
-        $dphex = array_fill(0, 5, 0);
-
-        // 计算第一个字节
-        $dphex[0] = 0x11 | (($dpvalue >> 29) & 0xFF);
-
-        // 计算 hp 和 he
-        $hp = ((($dpvalue >> 15) & 0x7FFF) * 2) + 1;
-        $he = ((($dpvalue & 0x7FFF) * 2) + 1);
-
-        // 将 hp 和 he 的高8位和低8位分开
-        $dphex[1] = ($hp >> 8) & 0xFF;
-        $dphex[2] = $hp & 0xFF;
-        $dphex[3] = ($he >> 8) & 0xFF;
-        $dphex[4] = $he & 0xFF;
-
-        return $dphex;
-    }
-
-    public static function hexPcr($dts) {
-        // 创建一个长度为7的数组，初始化所有元素为0
-        $adapt = array_fill(0, 7, 0);
-
-        // 计算每个字节
-        $adapt[0] = 0x50;
-        $adapt[1] = ($dts >> 25) & 0xFF;
-        $adapt[2] = ($dts >> 17) & 0xFF;
-        $adapt[3] = ($dts >> 9) & 0xFF;
-        $adapt[4] = ($dts >> 1) & 0xFF;
-        $adapt[5] = (($dts & 0x1) << 7) | 0x7E;
-
-        return $adapt;
-    }
-
-    public static function PES($mtype, $pts, $dts) {
-        // 初始化一个长度为9的数组
-        $header = array_fill(0, 9, 0);
-
-        // 复制 {0, 0, 1} 到 header[0:3]
-        $header[0] = 0;
-        $header[1] = 0;
-        $header[2] = 1;
-        $header[3] = $mtype;
-        $header[6] = 0x80;
-
-        if ($pts > 0) {
-            if ($dts > 0) {
-                $header[7] = 0xc0;
-                $header[8] = 0x0a;
-                $header = array_merge($header, self::hexPts($pts));
-                $header = array_merge($header, self::hexDts($dts));
-            } else {
-                $header[7] = 0x80;
-                $header[8] = 0x05;
-                $header = array_merge($header, self::hexPts($pts));
-            }
-        }
-
-        return $header;
-    }
-
-
-    private static function createAacPesPayload(string $payload, int $pts, int $dts, int $audioCodec, int $audioSampleRate, int $audioChannelConfig): string
+    private static function createAacPesPayload(string $payload, int $pts,  int $audioCodec, int $audioSampleRate, int $audioChannelConfig): string
     {
         // 采样率索引
         $sampleRateIndex = 3; // 对应48kHz, ADTS采样率索引表
 
-        $adtsHeader = "\xFF\xF1" . // syncword: 12 bits, ID: 1 bit, layer: 2 bits, protection absent: 1 bit
+        $adtsHeader = "\xff\xf1" . // syncword: 12 bits, ID: 1 bit, layer: 2 bits, protection absent: 1 bit
             chr((($audioCodec - 1) << 6) | ($sampleRateIndex << 2) | (($audioChannelConfig >> 2) & 0x1)) .
-            chr((($audioChannelConfig & 0x3) << 6) | (7 + strlen($payload))) . "\xFF\xFC"; // 13-bit frame length
+            chr((($audioChannelConfig & 0x3) << 6) | (7 + strlen($payload))) . "\xff\xfc"; // 13-bit frame length
 
         $aacPayload = $adtsHeader . $payload;
-        return $aacPayload;
+
+        // 生成PES头
+        $pesHeader = [
+            0x00, 0x00, 0x01, // PES start code prefix
+            0xC1, // Stream ID
+            0x00, 0x00, // PES packet length (will be set later)
+            0x80, // '10' (2 bits) + PES_scrambling_control (2 bits) + PES_priority (1 bit) + data_alignment_indicator (1 bit) + copyright (1 bit) + original_or_copy (1 bit)
+            0x80, // '10' (2 bits) + PTS_DTS_flags (2 bits: '10' for PTS only) + ESCR_flag (1 bit) + ES_rate_flag (1 bit) + DSM_trick_mode_flag (1 bit) + additional_copy_info_flag (1 bit) + PES_CRC_flag (1 bit) + PES_extension_flag (1 bit)
+            0x05 // PES_header_data_length (5 bytes for PTS)
+        ];
+
+        // 生成PTS
+        $ptsHeader = [
+            (($pts >> 29) & 0x0E) | 0x21,
+            (($pts >> 22) & 0xFF),
+            (($pts >> 14) & 0xFE) | 0x01,
+            (($pts >> 7) & 0xFF),
+            (($pts << 1) & 0xFE) | 0x01
+        ];
+
+        $pesHeader = array_merge($pesHeader, $ptsHeader);
+
+        // 计算PES包长度
+        $pesPacketLength = 3 + 5 + strlen($aacPayload); // 3 bytes for PES start code prefix, 5 bytes for PTS, rest for payload
+        $pesHeader[4] = ($pesPacketLength >> 8) & 0xFF;
+        $pesHeader[5] = $pesPacketLength & 0xFF;
+
+        // 将PES头和AAC负载合并
+        $pesPayload = implode('',$pesHeader) . $aacPayload;
+
+        return $pesPayload;
     }
+
 
 
 

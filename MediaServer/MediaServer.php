@@ -259,8 +259,8 @@ class MediaServer
         }
 
 
-        //HLSDemo::make($frame, $publisher->getPublishPath());
-        Mpegts::make($frame,$publisher->getPublishPath());
+        HLSDemo::make($frame, $publisher->getPublishPath());
+        //Mpegts::make($frame,$publisher->getPublishPath());
         /** 获取这个媒体路径下的所有播放设备 */
         foreach (self::getPlayStreams($path) as $playStream) {
             /** 如果播放器不是空闲状态 */

@@ -86,4 +86,7 @@ https://blog.csdn.net/m0_37599645/article/details/117135283
 https://www.cnblogs.com/haibindev/archive/2011/11/10/2244442.html
 https://www.cnblogs.com/haibindev/archive/2011/12/29/2305712.html
 ==========================================================================================
-
+mpegts相关中文文档
+https://juejin.cn/post/7102476268930596871
+https://blog.yasking.org/a/learn-mpeg2-ts.html
+https://blog.csdn.net/qq_25333681/article/details/93541962
