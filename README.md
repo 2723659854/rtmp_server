@@ -164,6 +164,10 @@ ws://127.0.0.1:8504/a/b.flv
 ```txt
 email: 2723659854@qq.com  171892716@qq.com
 ```
+### 参考资料
+
+- FFmpeg https://ffmpeg.xianwaizhiyin.net/
+  虽然这里面大多数讲的都是ffmpeg工具，但是里面涉及到了很多音视频开发的基础知识。
 
  
 
