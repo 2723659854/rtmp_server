@@ -380,7 +380,6 @@ class MediaServer
                 ]
             ];
         }
-        var_dump(count($data));
         return $data ;
     }
 

@@ -504,7 +504,7 @@ class RtmpDemo
                 return;
             } else {
                 /** 因为转发有延迟，所以使用新的时间戳 */
-
+                $frame = trim($frame,"\r\n");
                 //$string = $type . "\r\n" . $timestamp . "\r\n" . $important . "\r\n" . $count . "\r\n" . $path . "\r\n" . $seq . "\r\n" . $frame . "\r\n\r\n";
                 /** 目前播放器可以拉流，缓冲数据，无法播放，不知道是什么原因 */
                 if ($type == MediaFrame::VIDEO_FRAME) {
