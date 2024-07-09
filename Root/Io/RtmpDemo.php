@@ -497,7 +497,7 @@ class RtmpDemo
             $count = $array[3];
             $path = $array[4];
             $seq = $array[5];
-            $frame = $array[6];
+            $frame = $array[6]??null;
             if ($type == "pong") {
                 logger()->info("心跳检测：".$type);
                 self::$pingCount = 0;
@@ -534,13 +534,6 @@ class RtmpDemo
                     }
                 }
 
-                if ($type == MediaFrame::VIDEO_FRAME) {
-                    if ($frame->frameType == VideoFrame::VIDEO_FRAME_TYPE_KEY_FRAME){
-                        if (!in_array($frame,self::$preKeyFrame[$path]??[])){
-                            self::$preKeyFrame[$path][] = $frame;
-                        }
-                    }
-                }
                 /** 处理连续帧，用于解码一个完整的页面 */
                 self::addKeyFrames($frame, $path);
                 /** 如果客户端多次断开 ，服务端无法给客户端发送数据 */
@@ -618,7 +611,13 @@ class RtmpDemo
      */
     public static function addKeyFrames(MediaFrame $frame, string $path)
     {
-
+        /** 避免重复存储相同的数据帧 */
+        if (!isset(self::$preKeyFrame[$path])){
+            self::$preKeyFrame[$path] = [];
+        }
+        if (in_array($frame,self::$preKeyFrame[$path])){
+            return;
+        }
         if ($frame->FRAME_TYPE == MediaFrame::VIDEO_FRAME) {
             $avcPack = $frame->getAVCPacket();
             /** 如果是关键帧I帧 */
@@ -809,6 +808,7 @@ class RtmpDemo
         return $result;
     }
 
+    public static array $serverWriteBuffer = [];
 
     /**
      * 网关监测客户端可写事件
@@ -818,6 +818,9 @@ class RtmpDemo
      */
     public function gatewayWrite($fd)
     {
+        if (!isset(self::$serverWriteBuffer[(int)$fd])){
+            self::$serverWriteBuffer[(int)$fd] = '';
+        }
         /** 需要优先发送的关键帧 */
         if (isset(self::$server2ClientsData[(int)$fd]) && !empty(self::$server2ClientsData[(int)$fd])) {
             /** 发送完成后，清空，否则一直发送关键帧，无法播放 */
@@ -841,13 +844,14 @@ class RtmpDemo
                         /** 使用http之类的文本分隔符 ，一整个报文之间用换行符分割  */
                         $string = $type . "\r\n" . $timestamp . "\r\n" . $important . "\r\n" . $count . "\r\n" . $path . "\r\n" . $seq . "\r\n" . $data . "\r\n\r\n";
 
+                        self::$serverWriteBuffer[(int)$fd] .= $string;
                         /** 他么的这数据也太长了，将数据切片发送 */
-                        $stringArray = self::splitString($string, 1024);
-                        if (is_resource($fd)) {
-                            foreach ($stringArray as $item) {
-                                fwrite($fd, $item);
-                            }
-                        }
+//                        $stringArray = self::splitString($string, 1024);
+//                        if (is_resource($fd)) {
+//                            foreach ($stringArray as $item) {
+//                                fwrite($fd, $item);
+//                            }
+//                        }
                     }
                 }
             }
@@ -870,15 +874,49 @@ class RtmpDemo
                 /** 使用http之类的文本分隔符 ，一整个报文之间用换行符分割 */
                 $string = $type . "\r\n" . $timestamp . "\r\n" . $important . "\r\n{$count}\r\n" . $path . "\r\n" . $seq . "\r\n" . $data . "\r\n\r\n";
 
+                self::$serverWriteBuffer[(int)$fd] .= $string;
                 /** 他么的这数据也太长了，将数据切片发送 */
-                $stringArray = self::splitString($string, 1024);
-                if (is_resource($fd)) {
-                    foreach ($stringArray as $item) {
+//                $stringArray = self::splitString($string, 1024);
+//                if (is_resource($fd)) {
+//                    foreach ($stringArray as $item) {
+//
+//                        @fwrite($fd, $item);
+//                    }
+//                }
+            }
+        }
 
-                        @fwrite($fd, $item);
+        /** 需要发送的数据总长度 */
+        $needWriteStringLength = strlen(self::$serverWriteBuffer[(int)$fd]);
+        if ($needWriteStringLength == 0){
+            return;
+        }
+        /** 实际发送长度 */
+        $hasWriteStringLength = @fwrite($fd, self::$serverWriteBuffer[(int)$fd]);
+        /** 客户端已死，清除客户端 */
+        if ($hasWriteStringLength == false) {
+            /** 清理关键帧 普通帧 发送暂存区 */
+            unset(self::$server2ClientsData[(int)$fd], self::$gatewayBuffer[(int)$fd], self::$serverWriteBuffer[(int)$fd]);
+            /** 清理客户端信息数据 */
+            foreach (RtmpDemo::$flvClientsInfo as $path => $clients) {
+                foreach ($clients as $index => $client) {
+                    if ($index == (int)$fd) {
+                        unset(RtmpDemo::$flvClientsInfo[$path][$index]);
                     }
                 }
             }
+            /** 清理链接 */
+            unset(self::$allSocket[(int)$fd]);
+            /** 清理客户端数据 */
+            unset(RtmpDemo::$flvClients[(int)$fd]);
+            return;
+        }
+        /** 如果已全部发送，则清空缓存 */
+        if ($needWriteStringLength == $hasWriteStringLength) {
+            self::$serverWriteBuffer[(int)$fd] = '';
+        } else {
+            /** 若只发送了一部分，则需要更新缓存，剩下的下一次再发送 */
+            self::$serverWriteBuffer[(int)$fd] = substr(self::$serverWriteBuffer[(int)$fd], $hasWriteStringLength);
         }
 
     }
