@@ -384,14 +384,17 @@ class HlsDemo
         }
     }
 
-    private static function createAacPesPayload(string $payload, int $pts,  int $audioCodec, int $audioSampleRate, int $audioChannelConfig): string
+
+    private static function createAacPesPayload(string $payload, int $pts, int $audioCodec, int $audioSampleRate, int $audioChannelConfig): string
     {
-        // 采样率索引
         $sampleRateIndex = 3; // 对应48kHz, ADTS采样率索引表
 
         $adtsHeader = "\xff\xf1" . // syncword: 12 bits, ID: 1 bit, layer: 2 bits, protection absent: 1 bit
             chr((($audioCodec - 1) << 6) | ($sampleRateIndex << 2) | (($audioChannelConfig >> 2) & 0x1)) .
-            chr((($audioChannelConfig & 0x3) << 6) | (7 + strlen($payload))) . "\xff\xfc"; // 13-bit frame length
+            chr((($audioChannelConfig & 0x3) << 6) | ((strlen($payload) + 7) >> 11)) . // frame length (13 bits)
+            chr(((strlen($payload) + 7) >> 3) & 0xFF) . // frame length (remaining 8 bits)
+            chr((((strlen($payload) + 7) & 0x7) << 5) | 0x1F) . // frame length (remaining 3 bits) + buffer fullness (5 bits)
+            chr(0xFC); // buffer fullness (remaining 6 bits) + 2 bits of 0
 
         $aacPayload = $adtsHeader . $payload;
 
@@ -422,10 +425,11 @@ class HlsDemo
         $pesHeader[5] = $pesPacketLength & 0xFF;
 
         // 将PES头和AAC负载合并
-        $pesPayload = implode('',$pesHeader) . $aacPayload;
+        $pesPayload = implode('', array_map('chr', $pesHeader)) . $aacPayload;
 
         return $pesPayload;
     }
+
 
 
 
@@ -461,12 +465,23 @@ class HlsDemo
     private static function createPes(int $stream_id, string $payload, int $pts, int $dts): string
     {
         $pesHeader = "\x00\x00\x01" . chr($stream_id);
-        $pesPacketLength = strlen($payload) + 14; // PES header length (14 bytes) - 1
-        $pesHeader .= chr(($pesPacketLength >> 8) & 0xFF);
-        $pesHeader .= chr($pesPacketLength & 0xFF);
-        $pesHeader .= "\x80"; // no scrambling, no priority, no alignment, PES header present
+
+        // PES packet length: 3 bytes (start code prefix) + 1 byte (stream id) + 2 bytes (packet length) +
+        // 1 byte (marker bits) + 1 byte (PTS/DTS flags) + 1 byte (header data length) + 5 bytes (PTS) + 5 bytes (DTS) + payload length
+        $pesPacketLength = strlen($payload) + 14; // 14 bytes for the PES header
+
+        if ($pesPacketLength > 0xFFFF) {
+            // If the packet length exceeds the maximum value, set it to 0, indicating unspecified length
+            $pesHeader .= "\x00\x00";
+        } else {
+            $pesHeader .= chr(($pesPacketLength >> 8) & 0xFF);
+            $pesHeader .= chr($pesPacketLength & 0xFF);
+        }
+
+        $pesHeader .= "\x80"; // Marker bits: '10' (no scrambling, no priority, no alignment)
         $pesHeader .= "\xC0"; // PTS and DTS present
-        $pesHeader .= "\x0A"; // PES header data length
+
+        $pesHeader .= "\x0A"; // PES header data length: 10 bytes for PTS and DTS
 
         // PTS field encoding
         $pesHeader .= chr((($pts >> 29) & 0x0E) | 0x21); // '0010' + 3 bits of PTS[32..30] + marker '1'
@@ -482,6 +497,7 @@ class HlsDemo
         $pesHeader .= chr(($dts >> 7) & 0xFF); // DTS[14..7]
         $pesHeader .= chr((($dts << 1) & 0xFE) | 0x01); // DTS[6..0] + marker '1'
 
+        // Combine PES header and payload
         return $pesHeader . $payload;
     }
 
